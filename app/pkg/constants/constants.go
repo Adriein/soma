@@ -8,6 +8,7 @@ const (
 	DatabaseName     = "DATABASE_NAME"
 	ServerPort       = "SERVER_PORT"
 	Env              = "ENV"
+	GeminiApiKey     = "GOOGLE_AI_STUDIO_GEMINI_API_KEY"
 )
 
 const (

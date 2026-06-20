@@ -1,7 +1,7 @@
 package meal
 
 type MealService interface {
-	Extract() []*Meal
+	Get() ([]*Meal, error)
 }
 
 type Service struct{}
@@ -10,6 +10,6 @@ func NewService() *Service {
 	return &Service{}
 }
 
-func (s *Service) Extract() []*Meal {
-	return nil
+func (s *Service) Get() ([]*Meal, error) {
+	return nil, nil
 }
