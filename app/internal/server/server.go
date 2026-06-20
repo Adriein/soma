@@ -12,13 +12,13 @@ import (
 	"github.com/rotisserie/eris"
 )
 
-type TibiaChar struct {
+type Soma struct {
 	app       *internal.App
 	gin       *gin.Engine
 	validator *validator.Validate
 }
 
-func New(port string) *TibiaChar {
+func New(port string) *Soma {
 	app := internal.NewApp()
 
 	engine := gin.New()
@@ -28,13 +28,13 @@ func New(port string) *TibiaChar {
 
 	engine.Use(middleware.Error(), gin.Logger(), gin.Recovery(), middleware.Tracer())
 
-	tibiaChar := &TibiaChar{
+	soma := &Soma{
 		app:       app,
 		gin:       engine,
 		validator: validator.New(),
 	}
 
-	tibiaChar.routeSetup()
+	soma.routeSetup()
 
 	if ginErr := engine.Run(port); ginErr != nil {
 		err := eris.Wrap(ginErr, "Error starting HTTP server")
@@ -42,12 +42,12 @@ func New(port string) *TibiaChar {
 		log.Fatal(eris.ToString(err, true))
 	}
 
-	slog.Info("Starting the TibiaChar at " + port)
+	slog.Info("Starting the Soma at " + port)
 
-	return tibiaChar
+	return soma
 }
 
-func (t *TibiaChar) routeSetup() {
+func (t *Soma) routeSetup() {
 	//HEALTH CHECK
 	t.gin.GET("/health", web.NewHealthController(t.app).Get())
 }
