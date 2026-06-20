@@ -36,6 +36,10 @@ func NewApp() *App {
 		constants.DatabaseName,
 		constants.ServerPort,
 		constants.Env,
+		constants.GeminiApiKey,
+		constants.TelegramBotApiToken,
+		constants.FatSecretClientId,
+		constants.FatSecretApiKey,
 	)
 
 	if envCheckerErr := checker.Check(); envCheckerErr != nil {
