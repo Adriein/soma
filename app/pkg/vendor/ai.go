@@ -30,13 +30,21 @@ type Candidate struct {
 	Content Content
 }
 
-type GeminiResponse struct {
+type AIRes struct {
 	Candidates []Candidate `json:"candidates"`
+}
+
+type AI interface {
+	Ask(question string) (*AIRes, error)
 }
 
 type Gemini struct{}
 
-func (g *Gemini) Ask(question string) error {
+func NewGemini() *Gemini {
+	return &Gemini{}
+}
+
+func (g *Gemini) Ask(question string) (*AIRes, error) {
 	apiKey := os.Getenv(constants.GeminiApiKey)
 
 	body := GeminiRequest{
@@ -52,13 +60,13 @@ func (g *Gemini) Ask(question string) error {
 	jsonData, err := json.Marshal(body)
 
 	if err != nil {
-		return eris.Wrap(err, "Gemini ask, error marshaling json")
+		return nil, eris.Wrap(err, "Gemini ask, error marshaling json")
 	}
 
 	req, err := http.NewRequest("POST", GemniniURL, bytes.NewBuffer(jsonData))
 
 	if err != nil {
-		return eris.Wrap(err, "Gemini ask, error creating the request")
+		return nil, eris.Wrap(err, "Gemini ask, error creating the request")
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -69,7 +77,7 @@ func (g *Gemini) Ask(question string) error {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return eris.Wrap(err, "Gemini ask, error doing the request")
+		return nil, eris.Wrap(err, "Gemini ask, error doing the request")
 	}
 
 	defer resp.Body.Close()
@@ -77,24 +85,18 @@ func (g *Gemini) Ask(question string) error {
 	resBody, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return eris.Wrap(err, "Gemini ask, error reading response")
+		return nil, eris.Wrap(err, "Gemini ask, error reading response")
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return eris.New(fmt.Sprintf("Gemini response error, %s with http code %d", string(resBody), resp.StatusCode))
+		return nil, eris.New(fmt.Sprintf("Gemini response error, %s with http code %d", string(resBody), resp.StatusCode))
 	}
 
-	// 8. Parse and print the clean text output
-	var geminiResp GeminiResponse
-	if err := json.Unmarshal(body, &geminiResp); err != nil {
-		fmt.Printf("Error unmarshaling response: %v\n", err)
-		return
+	var geminiResp AIRes
+
+	if err := json.Unmarshal(resBody, &geminiResp); err != nil {
+		return nil, eris.Wrap(err, "Gemini ask, error unmarshalling the response")
 	}
 
-	if len(geminiResp.Candidates) > 0 && len(geminiResp.Candidates[0].Content.Parts) > 0 {
-		fmt.Println("Gemini Response:")
-		fmt.Println(geminiResp.Candidates[0].Content.Parts[0].Text)
-	} else {
-		fmt.Println("No content returned in the response.")
-	}
+	return &geminiResp, nil
 }

@@ -1,7 +1,10 @@
 package coach
 
 import (
+	"fmt"
+
 	"github.com/adriein/soma/app/internal/meal"
+	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
 
@@ -10,15 +13,19 @@ type CoachService interface {
 }
 
 type Service struct {
-	mealService meal.MealService
+	mealServ meal.MealService
+	aiServ   vendor.AI
 }
 
-func NewService() *Service {
-	return &Service{}
+func NewService(mealServ meal.MealService, aiServ vendor.AI) *Service {
+	return &Service{
+		mealServ: mealServ,
+		aiServ:   aiServ,
+	}
 }
 
 func (s *Service) Assessment() (*ActionPlan, error) {
-	meals, err := s.mealService.Get()
+	meals, err := s.mealServ.Get()
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Assessment error getting meals")
@@ -27,6 +34,14 @@ func (s *Service) Assessment() (*ActionPlan, error) {
 	if meals == nil {
 		return nil, eris.New("Assessment error, no meals found")
 	}
+
+	aiAssessment, err := s.aiServ.Ask("")
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Assesment error calling AI")
+	}
+
+	fmt.Print(aiAssessment)
 
 	return nil, nil
 }
