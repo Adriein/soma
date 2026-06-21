@@ -52,5 +52,5 @@ func (t *Soma) routeSetup() {
 	t.gin.GET("/health", web.NewHealthController(t.app).Get())
 
 	//AUTH
-	t.gin.GET("/auth", web.NewAuthController(t.app).Get())
+	t.gin.GET("/auth", web.NewAuthController(t.app).Auth())
 }

@@ -18,9 +18,17 @@ func NewAuthController(app *internal.App) *AuthController {
 	}
 }
 
-func (c *AuthController) Get() gin.HandlerFunc {
+func (c *AuthController) Auth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		c.service.ConnectNutritionApp()
+
+		ctx.JSON(http.StatusOK, gin.H{"ok": true})
+	}
+}
+
+func (c *AuthController) AuthWebhook() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		c.service.VerifyToken("")
 
 		ctx.JSON(http.StatusOK, gin.H{"ok": true})
 	}

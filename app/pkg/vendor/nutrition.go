@@ -31,12 +31,14 @@ const (
 
 type NutritionDiary interface {
 	GetToken() (*OAuth, error)
-	Authorize(oauth *OAuth) (*string, error)
+	AuthorizeToken(oauth *OAuth) (*string, error)
+	VerifyToken(oauth *OAuth) error
 }
 
 type OAuth struct {
 	OAuthToken       string
 	OAuthTokenSecret string
+	OauthVerifyCode  string
 }
 
 type DiaryMeal struct {
@@ -72,7 +74,7 @@ type FSDiaryEntry struct {
 	} `json:"food_entries"`
 }
 
-type FSUnauthorizedTokenRes struct {
+type FSTokenRes struct {
 	OAuthToken       string `json:"oauth_token"`
 	OAuthTokenSecret string `json:"oauth_token_secret"`
 }
@@ -147,7 +149,7 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
 	}
 
-	var res FSUnauthorizedTokenRes
+	var res FSTokenRes
 
 	if err := json.Unmarshal(body, &res); err != nil {
 		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
@@ -159,7 +161,7 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 	}, nil
 }
 
-func (fs *FatSecret) Authorize(oauth *OAuth) (*string, error) {
+func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
 	clientID := os.Getenv(constants.FatSecretClientId)
 
 	params := map[string]string{
@@ -209,10 +211,10 @@ func (fs *FatSecret) Authorize(oauth *OAuth) (*string, error) {
 		form.Add(k, v)
 	}
 
-	resp, err := http.PostForm(GetRequestTokenURL, form)
+	resp, err := http.PostForm(AuthorizeTokenURL, form)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error making post request")
+		return nil, eris.Wrap(err, "Error doing Authorize post request")
 	}
 
 	defer resp.Body.Close()
@@ -220,16 +222,90 @@ func (fs *FatSecret) Authorize(oauth *OAuth) (*string, error) {
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error reading body stream")
+		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
 	}
 
-	var res FSUnauthorizedTokenRes
+	var res FSTokenRes
 
 	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
+		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
 	}
 
 	return &signature, nil
+}
+
+func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
+	clientID := os.Getenv(constants.FatSecretClientId)
+
+	params := map[string]string{
+		"oauth_consumer_key":     clientID,
+		"oauth_signature_method": OAuthSignatureMethod,
+		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
+		"oauth_nonce":            generateNonce(),
+		"oauth_version":          OAuthVersion,
+		"oauth_token":            oauth.OAuthToken,
+		"oauth_verifier":         oauth.OauthVerifyCode,
+	}
+
+	var keys []string
+
+	for k := range params {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var paramPairs []string
+
+	for _, k := range keys {
+		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
+	}
+
+	normalizedParams := strings.Join(paramPairs, "&")
+
+	signatureBaseString := fmt.Sprintf("%s&%s&%s",
+		"GET",
+		oauthEscape(GetRequestTokenURL),
+		oauthEscape(normalizedParams),
+	)
+
+	apiKey := os.Getenv(constants.FatSecretApiKey)
+
+	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
+
+	mac := hmac.New(sha1.New, []byte(signingKey))
+	mac.Write([]byte(signatureBaseString))
+	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	params["oauth_signature"] = signature
+
+	form := url.Values{}
+
+	for k, v := range params {
+		form.Add(k, v)
+	}
+
+	resp, err := http.PostForm(GetAccessTokenURL, form)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error doing Verify post request")
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
+	}
+
+	var res FSTokenRes
+
+	if err := json.Unmarshal(body, &res); err != nil {
+		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
+	}
+
+	return nil, nil
 }
 
 func generateNonce() string {

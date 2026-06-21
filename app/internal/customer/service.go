@@ -7,6 +7,7 @@ import (
 
 type CustomerService interface {
 	ConnectNutritionApp() (*string, error)
+	VerifyToken(tokenSecret string) error
 }
 
 type Service struct {
@@ -26,11 +27,15 @@ func (s *Service) ConnectNutritionApp() (*string, error) {
 		return nil, eris.Wrap(err, "Error getting the unauthorized token")
 	}
 
-	authURL, err := s.nutritionDiaryAPI.Authorize(oauth)
+	authURL, err := s.nutritionDiaryAPI.AuthorizeToken(oauth)
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Error authorizing the token")
 	}
 
 	return authURL, nil
+}
+
+func (s *Service) VerifyToken(tokenSecret string) error {
+	return nil
 }
