@@ -136,7 +136,7 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 	resp, err := http.PostForm(GetRequestTokenURL, form)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error making post request")
+		return nil, eris.Wrap(err, "Error doing post request to obtain FatSecret unauthorized token")
 	}
 
 	defer resp.Body.Close()
@@ -144,13 +144,13 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error reading body stream")
+		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
 	}
 
 	var res FSUnauthorizedTokenRes
 
 	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
+		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
 	}
 
 	return &OAuth{

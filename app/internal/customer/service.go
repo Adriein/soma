@@ -1,32 +1,35 @@
 package customer
 
-import "github.com/adriein/soma/app/pkg/vendor"
+import (
+	"github.com/adriein/soma/app/pkg/vendor"
+	"github.com/rotisserie/eris"
+)
 
 type CustomerService interface {
 	ConnectNutritionApp() (*string, error)
 }
 
 type Service struct {
-	diary vendor.NutritionDiary
+	nutritionDiaryAPI vendor.NutritionDiary
 }
 
-func NewService(diary vendor.NutritionDiary) *Service {
+func NewService(nutritionDiaryAPI vendor.NutritionDiary) *Service {
 	return &Service{
-		diary: diary,
+		nutritionDiaryAPI: nutritionDiaryAPI,
 	}
 }
 
 func (s *Service) ConnectNutritionApp() (*string, error) {
-	oauth, err := s.diary.GetToken()
+	oauth, err := s.nutritionDiaryAPI.GetToken()
 
 	if err != nil {
-		return nil, err
+		return nil, eris.Wrap(err, "Error getting the unauthorized token")
 	}
 
-	authURL, err := s.diary.Authorize(oauth)
+	authURL, err := s.nutritionDiaryAPI.Authorize(oauth)
 
 	if err != nil {
-		return nil, err
+		return nil, eris.Wrap(err, "Error authorizing the token")
 	}
 
 	return authURL, nil
