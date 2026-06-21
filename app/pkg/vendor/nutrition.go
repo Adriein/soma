@@ -32,7 +32,7 @@ const (
 type NutritionDiary interface {
 	GetToken() (*OAuth, error)
 	AuthorizeToken(oauth *OAuth) (*string, error)
-	VerifyToken(oauth *OAuth) error
+	VerifyToken(oauth *OAuth) (*OAuth, error)
 }
 
 type OAuth struct {
