@@ -84,7 +84,7 @@ func NewFatSecret() *FatSecret {
 	return &FatSecret{}
 }
 
-func (fs *FatSecret) GetUnauthorizedToken() error {
+func (fs *FatSecret) GetToken() (*OAuth, error) {
 	clientID := os.Getenv(constants.FatSecretClientId)
 
 	params := map[string]string{
@@ -137,6 +137,82 @@ func (fs *FatSecret) GetUnauthorizedToken() error {
 	resp, err := http.PostForm(GetRequestTokenURL, form)
 
 	if err != nil {
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error making post request")
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error reading body stream")
+	}
+
+	var res FSUnauthorizedTokenRes
+
+	if err := json.Unmarshal(body, &res); err != nil {
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
+	}
+
+	return &OAuth{
+		OAuthToken:       res.OAuthToken,
+		OAuthTokenSecret: res.OAuthTokenSecret,
+	}, nil
+}
+
+func (fs *FatSecret) Authorize(oauth *OAuth) error {
+	clientID := os.Getenv(constants.FatSecretClientId)
+
+	params := map[string]string{
+		"oauth_consumer_key":     clientID,
+		"oauth_signature_method": OAuthSignatureMethod,
+		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
+		"oauth_nonce":            generateNonce(),
+		"oauth_version":          OAuthVersion,
+		"oauth_token":            oauth.OAuthToken,
+	}
+
+	var keys []string
+
+	for k := range params {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var paramPairs []string
+
+	for _, k := range keys {
+		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
+	}
+
+	normalizedParams := strings.Join(paramPairs, "&")
+
+	signatureBaseString := fmt.Sprintf("%s&%s&%s",
+		"GET",
+		oauthEscape(GetRequestTokenURL),
+		oauthEscape(normalizedParams),
+	)
+
+	apiKey := os.Getenv(constants.FatSecretApiKey)
+
+	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
+
+	mac := hmac.New(sha1.New, []byte(signingKey))
+	mac.Write([]byte(signatureBaseString))
+	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	params["oauth_signature"] = signature
+
+	form := url.Values{}
+
+	for k, v := range params {
+		form.Add(k, v)
+	}
+
+	resp, err := http.PostForm(GetRequestTokenURL, form)
+
+	if err != nil {
 		return eris.Wrap(err, "FatSecret get unauthorized token error making post request")
 	}
 
@@ -153,8 +229,6 @@ func (fs *FatSecret) GetUnauthorizedToken() error {
 	if err := json.Unmarshal(body, &res); err != nil {
 		return eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
 	}
-
-	fmt.Printf("HTTP Status: %s\n", resp.Status)
 
 	return nil
 }
