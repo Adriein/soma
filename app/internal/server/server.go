@@ -50,4 +50,7 @@ func New(port string) *Soma {
 func (t *Soma) routeSetup() {
 	//HEALTH CHECK
 	t.gin.GET("/health", web.NewHealthController(t.app).Get())
+
+	//AUTH
+	t.gin.GET("/auth", web.NewAuthController(t.app).Get())
 }

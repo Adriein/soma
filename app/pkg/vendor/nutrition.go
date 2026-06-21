@@ -31,8 +31,7 @@ const (
 
 type NutritionDiary interface {
 	GetToken() (*OAuth, error)
-	Authorize(oauth *OAuth) error
-	GetDiaryEntry() ([]*DiaryMeal, error)
+	Authorize(oauth *OAuth) (*string, error)
 }
 
 type OAuth struct {
@@ -160,7 +159,7 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 	}, nil
 }
 
-func (fs *FatSecret) Authorize(oauth *OAuth) error {
+func (fs *FatSecret) Authorize(oauth *OAuth) (*string, error) {
 	clientID := os.Getenv(constants.FatSecretClientId)
 
 	params := map[string]string{
@@ -213,7 +212,7 @@ func (fs *FatSecret) Authorize(oauth *OAuth) error {
 	resp, err := http.PostForm(GetRequestTokenURL, form)
 
 	if err != nil {
-		return eris.Wrap(err, "FatSecret get unauthorized token error making post request")
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error making post request")
 	}
 
 	defer resp.Body.Close()
@@ -221,16 +220,16 @@ func (fs *FatSecret) Authorize(oauth *OAuth) error {
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return eris.Wrap(err, "FatSecret get unauthorized token error reading body stream")
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error reading body stream")
 	}
 
 	var res FSUnauthorizedTokenRes
 
 	if err := json.Unmarshal(body, &res); err != nil {
-		return eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
+		return nil, eris.Wrap(err, "FatSecret get unauthorized token error parsing body")
 	}
 
-	return nil
+	return &signature, nil
 }
 
 func generateNonce() string {

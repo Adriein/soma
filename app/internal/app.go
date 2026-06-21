@@ -8,12 +8,16 @@ import (
 	"time"
 
 	"github.com/adriein/soma/app/database"
+	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/constants"
 	"github.com/adriein/soma/app/pkg/helper"
+	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/joho/godotenv"
 )
 
-type Modules struct{}
+type Modules struct {
+	Customer customer.CustomerService
+}
 
 type App struct {
 	Database *sql.DB
@@ -80,5 +84,10 @@ func initLogger() *slog.Logger {
 }
 
 func initModules(db *sql.DB, logger *slog.Logger) *Modules {
-	return &Modules{}
+	fsApi := vendor.NewFatSecret()
+	customerServ := customer.NewService(fsApi)
+
+	return &Modules{
+		Customer: customerServ,
+	}
 }
