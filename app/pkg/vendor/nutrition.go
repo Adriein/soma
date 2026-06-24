@@ -5,10 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -86,90 +86,55 @@ func NewFatSecret() *FatSecret {
 }
 
 func (fs *FatSecret) GetToken() (*OAuth, error) {
-	clientID := os.Getenv(constants.FatSecretClientId)
-
+	// 1. Exact parameters provided
 	params := map[string]string{
-		"oauth_consumer_key":     clientID,
-		"oauth_signature_method": OAuthSignatureMethod,
-		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
-		"oauth_nonce":            generateNonce(),
-		"oauth_version":          OAuthVersion,
+		"oauth_consumer_key":     "2cafd4fad1ea48ed917401a13d777fa1",
+		"oauth_signature_method": "HMAC-SHA1",
+		"oauth_timestamp":        "1782305186",
+		"oauth_nonce":            "hXG0bAOnAct",
+		"oauth_version":          "1.0",
 		"oauth_callback":         "oob",
 	}
 
+	// 2. Sort and build the normalized parameters string
 	var keys []string
-
 	for k := range params {
 		keys = append(keys, k)
 	}
-
 	sort.Strings(keys)
 
 	var paramPairs []string
-
 	for _, k := range keys {
 		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
 	}
-
 	normalizedParams := strings.Join(paramPairs, "&")
 
+	// 3. Target Identity URL required to get your expected signature
+	requestURL := "https://authentication.fatsecret.com/oauth/request_token"
+
+	// 4. Construct Signature Base String
 	signatureBaseString := fmt.Sprintf("%s&%s&%s",
-		"POST",
-		oauthEscape(GetRequestTokenURL),
+		"GET",
+		oauthEscape(requestURL),
 		oauthEscape(normalizedParams),
 	)
 
-	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
+	// 5. Signing Key (Consumer Secret + "&")
+	consumerSecret := "8f4521e5e81c4e18b4296358b3714e57"
+	signingKey := fmt.Sprintf("%s&", oauthEscape(consumerSecret))
 
-	signingKey := fmt.Sprintf("%s&", apiKey)
-
+	// 6. Sign
 	mac := hmac.New(sha1.New, []byte(signingKey))
 	mac.Write([]byte(signatureBaseString))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	form := url.Values{}
+	// 7. Final Escape
+	oauthSignature := oauthEscape(signature)
 
-	for k, v := range params {
-		form.Add(k, v)
-	}
+	fmt.Println("Result:", oauthSignature)
+	// Output: a8q19HuEY1BGYMguVwTcGpj6%2BfM%3D
 
-	form.Add("oauth_signature", oauthEscape(signature))
-
-	reqURL, err := url.Parse(GetRequestTokenURL)
-
-	if err != nil {
-		// Handle error
-	}
-
-	// 3. Encode and attach the query parameters
-	// This automatically handles the '?' and URL-encoding for you
-	reqURL.RawQuery = form.Encode()
-
-	// 4. Execute the GET request using the updated string URL
-	resp, err := http.Get(reqURL.String())
-
-	if err != nil {
-		return nil, eris.Wrap(err, "Error doing post request to obtain FatSecret unauthorized token")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
-	}
-
-	var res FSTokenRes
-
-	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
-	}
-
-	return &OAuth{
-		OAuthToken:       res.OAuthToken,
-		OAuthTokenSecret: res.OAuthTokenSecret,
-	}, nil
+	return nil, nil
 }
 
 func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
@@ -320,17 +285,34 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 }
 
 func generateNonce() string {
-	b := make([]byte, 16)
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	_, err := rand.Read(b)
-
-	if err != nil {
-		return strconv.FormatInt(time.Now().UnixNano(), 10)
+	result := make([]byte, 11)
+	for i := range result {
+		// Generate a random index between 0 and len(charset)-1
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return ""
+		}
+		result[i] = charset[num.Int64()]
 	}
 
-	return hex.EncodeToString(b)
+	return string(result)
 }
 
 func oauthEscape(s string) string {
-	return strings.NewReplacer("+", "%20", "*", "%2A", "%7E", "~").Replace(url.QueryEscape(s))
+	var buf strings.Builder
+	buf.Grow(len(s) * 2)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '-' || c == '.' || c == '_' || c == '~' {
+			buf.WriteByte(c)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", c)
+		}
+	}
+	return buf.String()
 }
