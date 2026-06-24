@@ -1,6 +1,7 @@
 package vendor
 
 import (
+	"maps"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -85,95 +86,108 @@ func NewFatSecret() *FatSecret {
 	return &FatSecret{}
 }
 
-func (fs *FatSecret) GetToken() (*OAuth, error) {
+func (fs *FatSecret) makeRequest(method string, requestURL string, params map[string]string, tokenSecret string) ([]byte, error) {
 	clientID := os.Getenv(constants.FatSecretClientId)
 
-	params := map[string]string{
+	baseParams := map[string]string{
 		"oauth_consumer_key":     clientID,
 		"oauth_signature_method": OAuthSignatureMethod,
 		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
 		"oauth_nonce":            generateNonce(),
 		"oauth_version":          OAuthVersion,
-		"oauth_callback":         "oob",
 	}
 
-	var keys []string
-	for k := range params {
+	maps.Copy(baseParams, params)
+
+	keys := make([]string, 0, len(baseParams))
+
+	for k := range baseParams {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
 
-	var paramPairs []string
+	paramPairs := make([]string, 0, len(keys))
+
 	for _, k := range keys {
-		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
+		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(baseParams[k])))
 	}
 
 	normalizedParams := strings.Join(paramPairs, "&")
 
 	signatureBaseString := fmt.Sprintf("%s&%s&%s",
-		"GET",
-		oauthEscape(GetRequestTokenURL),
+		method,
+		oauthEscape(requestURL),
 		oauthEscape(normalizedParams),
 	)
 
 	consumerSecret := os.Getenv(constants.FatSecretApiKeyOauth1)
-	signingKey := fmt.Sprintf("%s&", oauthEscape(consumerSecret))
+
+	var signingKey string
+	if tokenSecret != "" {
+		signingKey = fmt.Sprintf("%s&%s&", oauthEscape(consumerSecret), oauthEscape(tokenSecret))
+	} else {
+		signingKey = fmt.Sprintf("%s&", oauthEscape(consumerSecret))
+	}
 
 	mac := hmac.New(sha1.New, []byte(signingKey))
 	mac.Write([]byte(signatureBaseString))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	oauthSignature := oauthEscape(signature)
+	baseParams["oauth_signature"] = signature
 
 	form := url.Values{}
 
-	for k, v := range params {
+	for k, v := range baseParams {
 		form.Add(k, v)
 	}
 
-	form.Add("oauth_signature", oauthSignature)
+	var req *http.Request
+	var err error
 
-	query := fmt.Sprintf(
-		"%s?oauth_consumer_key=%s&oauth_signature_method=%s&oauth_timestamp=%s&oauth_nonce=%s&oauth_version=%s&oauth_callback=%s&oauth_signature=%s",
-		GetRequestTokenURL,
-		clientID,
-		OAuthSignatureMethod,
-		form.Get("oauth_timestamp"),
-		form.Get("oauth_nonce"),
-		OAuthVersion,
-		oauthEscape(form.Get("oauth_callback")),
-		form.Get("oauth_signature"),
-	)
-
-	req, err := http.NewRequest("GET", query, nil)
+	if method == "GET" {
+		req, err = http.NewRequest("GET", requestURL+"?"+form.Encode(), nil)
+	} else {
+		req, err = http.NewRequest("POST", requestURL, strings.NewReader(form.Encode()))
+		if err == nil {
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
 
 	if err != nil {
-		return nil, eris.Wrap(err, "Error creating the request to obtain FatSecret unauthorized token")
+		return nil, eris.Wrap(err, "failed to create HTTP request")
 	}
 
 	req.Header.Add("Accept", "application/x-www-form-urlencoded")
 
 	client := &http.Client{}
-
 	resp, err := client.Do(req)
-
 	if err != nil {
-		return nil, eris.Wrap(err, "Error doing post request to obtain FatSecret unauthorized token")
+		return nil, eris.Wrap(err, "failed to execute HTTP request")
 	}
-
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
-
 	if err != nil {
-		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
+		return nil, eris.Wrap(err, "failed to read response body")
+	}
+
+	return body, nil
+}
+
+func (fs *FatSecret) GetToken() (*OAuth, error) {
+	params := map[string]string{
+		"oauth_callback": "oob",
+	}
+
+	body, err := fs.makeRequest("GET", GetRequestTokenURL, params, "")
+	if err != nil {
+		return nil, err
 	}
 
 	var res FSTokenRes
-
 	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
+		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
 	}
 
 	return &OAuth{
@@ -183,147 +197,37 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 }
 
 func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
-	clientID := os.Getenv(constants.FatSecretClientId)
-
 	params := map[string]string{
-		"oauth_consumer_key":     clientID,
-		"oauth_signature_method": OAuthSignatureMethod,
-		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
-		"oauth_nonce":            generateNonce(),
-		"oauth_version":          OAuthVersion,
-		"oauth_token":            oauth.OAuthToken,
+		"oauth_token": oauth.OAuthToken,
 	}
 
-	var keys []string
-
-	for k := range params {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	var paramPairs []string
-
-	for _, k := range keys {
-		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
-	}
-
-	normalizedParams := strings.Join(paramPairs, "&")
-
-	signatureBaseString := fmt.Sprintf("%s&%s&%s",
-		"GET",
-		oauthEscape(GetRequestTokenURL),
-		oauthEscape(normalizedParams),
-	)
-
-	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
-
-	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
-
-	mac := hmac.New(sha1.New, []byte(signingKey))
-	mac.Write([]byte(signatureBaseString))
-	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-
-	params["oauth_signature"] = signature
-
-	form := url.Values{}
-
-	for k, v := range params {
-		form.Add(k, v)
-	}
-
-	resp, err := http.PostForm(AuthorizeTokenURL, form)
-
+	body, err := fs.makeRequest("POST", AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
 	if err != nil {
-		return nil, eris.Wrap(err, "Error doing Authorize post request")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
+		return nil, err
 	}
 
 	var res FSTokenRes
-
 	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
+		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
 	}
 
-	return &signature, nil
+	return &res.OAuthToken, nil
 }
 
 func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
-	clientID := os.Getenv(constants.FatSecretClientId)
-
 	params := map[string]string{
-		"oauth_consumer_key":     clientID,
-		"oauth_signature_method": OAuthSignatureMethod,
-		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
-		"oauth_nonce":            generateNonce(),
-		"oauth_version":          OAuthVersion,
-		"oauth_token":            oauth.OAuthToken,
-		"oauth_verifier":         oauth.OauthVerifyCode,
+		"oauth_token":    oauth.OAuthToken,
+		"oauth_verifier": oauth.OauthVerifyCode,
 	}
 
-	var keys []string
-
-	for k := range params {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	var paramPairs []string
-
-	for _, k := range keys {
-		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(params[k])))
-	}
-
-	normalizedParams := strings.Join(paramPairs, "&")
-
-	signatureBaseString := fmt.Sprintf("%s&%s&%s",
-		"GET",
-		oauthEscape(GetRequestTokenURL),
-		oauthEscape(normalizedParams),
-	)
-
-	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
-
-	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
-
-	mac := hmac.New(sha1.New, []byte(signingKey))
-	mac.Write([]byte(signatureBaseString))
-	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-
-	params["oauth_signature"] = oauthEscape(signature)
-
-	form := url.Values{}
-
-	for k, v := range params {
-		form.Add(k, v)
-	}
-
-	resp, err := http.PostForm(GetAccessTokenURL, form)
-
+	body, err := fs.makeRequest("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
 	if err != nil {
-		return nil, eris.Wrap(err, "Error doing Verify post request")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, eris.Wrap(err, "Error reading body stream of FatSecret response")
+		return nil, err
 	}
 
 	var res FSTokenRes
-
 	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "Error unmarshaling FatSecret response body")
+		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
 	}
 
 	return nil, nil
