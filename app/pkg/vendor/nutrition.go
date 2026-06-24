@@ -111,7 +111,6 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 
 	normalizedParams := strings.Join(paramPairs, "&")
 
-	// 4. Construct Signature Base String
 	signatureBaseString := fmt.Sprintf("%s&%s&%s",
 		"GET",
 		oauthEscape(GetRequestTokenURL),
@@ -347,18 +346,7 @@ func generateNonce() string {
 }
 
 func oauthEscape(s string) string {
-	var buf strings.Builder
-	buf.Grow(len(s) * 2)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c >= 'a' && c <= 'z') ||
-			(c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') ||
-			c == '-' || c == '.' || c == '_' || c == '~' {
-			buf.WriteByte(c)
-		} else {
-			fmt.Fprintf(&buf, "%%%02X", c)
-		}
-	}
-	return buf.String()
+	escaped := url.QueryEscape(s)
+
+	return strings.ReplaceAll(escaped, "+", "%20")
 }
