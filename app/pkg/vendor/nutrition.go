@@ -1,7 +1,6 @@
 package vendor
 
 import (
-	"maps"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -9,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -86,22 +86,12 @@ func NewFatSecret() *FatSecret {
 	return &FatSecret{}
 }
 
-func (fs *FatSecret) makeRequest(method string, requestURL string, params map[string]string, tokenSecret string) ([]byte, error) {
-	clientID := os.Getenv(constants.FatSecretClientId)
+func (fs *FatSecret) makeRequestAuth(method string, requestURL string, extraParams map[string]string, tokenSecret string) ([]byte, error) {
+	params := fs.mergeWithBasicParams(extraParams)
 
-	baseParams := map[string]string{
-		"oauth_consumer_key":     clientID,
-		"oauth_signature_method": OAuthSignatureMethod,
-		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
-		"oauth_nonce":            generateNonce(),
-		"oauth_version":          OAuthVersion,
-	}
+	keys := make([]string, 0, len(params))
 
-	maps.Copy(baseParams, params)
-
-	keys := make([]string, 0, len(baseParams))
-
-	for k := range baseParams {
+	for k := range params {
 		keys = append(keys, k)
 	}
 
@@ -110,58 +100,37 @@ func (fs *FatSecret) makeRequest(method string, requestURL string, params map[st
 	paramPairs := make([]string, 0, len(keys))
 
 	for _, k := range keys {
-		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", oauthEscape(k), oauthEscape(baseParams[k])))
+		paramPairs = append(paramPairs, fmt.Sprintf("%s=%s", fs.oauthEscape(k), fs.oauthEscape(params[k])))
 	}
 
 	normalizedParams := strings.Join(paramPairs, "&")
 
 	signatureBaseString := fmt.Sprintf("%s&%s&%s",
 		method,
-		oauthEscape(requestURL),
-		oauthEscape(normalizedParams),
+		fs.oauthEscape(requestURL),
+		fs.oauthEscape(normalizedParams),
 	)
 
-	consumerSecret := os.Getenv(constants.FatSecretApiKeyOauth1)
-
-	var signingKey string
-	if tokenSecret != "" {
-		signingKey = fmt.Sprintf("%s&%s&", oauthEscape(consumerSecret), oauthEscape(tokenSecret))
-	} else {
-		signingKey = fmt.Sprintf("%s&", oauthEscape(consumerSecret))
-	}
+	signingKey := fs.buildSigningKey(tokenSecret)
 
 	mac := hmac.New(sha1.New, []byte(signingKey))
 	mac.Write([]byte(signatureBaseString))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	baseParams["oauth_signature"] = signature
+	params["oauth_signature"] = signature
 
 	form := url.Values{}
 
-	for k, v := range baseParams {
+	for k, v := range params {
 		form.Add(k, v)
 	}
 
-	var req *http.Request
-	var err error
-
-	if method == "GET" {
-		req, err = http.NewRequest("GET", requestURL+"?"+form.Encode(), nil)
-	} else {
-		req, err = http.NewRequest("POST", requestURL, strings.NewReader(form.Encode()))
-		if err == nil {
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		}
-	}
-
-	if err != nil {
-		return nil, eris.Wrap(err, "failed to create HTTP request")
-	}
-
-	req.Header.Add("Accept", "application/x-www-form-urlencoded")
+	req, err := fs.buildRequest(method, requestURL, form)
 
 	client := &http.Client{}
+
 	resp, err := client.Do(req)
+
 	if err != nil {
 		return nil, eris.Wrap(err, "failed to execute HTTP request")
 	}
@@ -180,7 +149,7 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 		"oauth_callback": "oob",
 	}
 
-	body, err := fs.makeRequest("GET", GetRequestTokenURL, params, "")
+	body, err := fs.makeRequestAuth("GET", GetRequestTokenURL, params, "")
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +170,7 @@ func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
 		"oauth_token": oauth.OAuthToken,
 	}
 
-	body, err := fs.makeRequest("POST", AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
+	body, err := fs.makeRequestAuth("POST", AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +189,7 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 		"oauth_verifier": oauth.OauthVerifyCode,
 	}
 
-	body, err := fs.makeRequest("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
+	body, err := fs.makeRequestAuth("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +202,7 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 	return nil, nil
 }
 
-func generateNonce() string {
+func (fs *FatSecret) generateNonce() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 	result := make([]byte, 11)
@@ -249,8 +218,54 @@ func generateNonce() string {
 	return string(result)
 }
 
-func oauthEscape(s string) string {
+func (fs *FatSecret) oauthEscape(s string) string {
 	escaped := url.QueryEscape(s)
 
 	return strings.ReplaceAll(escaped, "+", "%20")
+}
+
+func (fs *FatSecret) mergeWithBasicParams(params map[string]string) map[string]string {
+	clientID := os.Getenv(constants.FatSecretClientId)
+
+	baseParams := map[string]string{
+		"oauth_consumer_key":     clientID,
+		"oauth_signature_method": OAuthSignatureMethod,
+		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
+		"oauth_nonce":            fs.generateNonce(),
+		"oauth_version":          OAuthVersion,
+	}
+
+	maps.Copy(baseParams, params)
+
+	return baseParams
+}
+
+func (fs *FatSecret) buildSigningKey(tokenSecret string) string {
+	consumerSecret := os.Getenv(constants.FatSecretApiKeyOauth1)
+
+	if tokenSecret != "" {
+		return fmt.Sprintf("%s&%s&", fs.oauthEscape(consumerSecret), fs.oauthEscape(tokenSecret))
+	}
+
+	return fmt.Sprintf("%s&", fs.oauthEscape(consumerSecret))
+}
+
+func (fs *FatSecret) buildRequest(method string, requestURL string, form url.Values) (*http.Request, error) {
+	if method == "GET" {
+		req, err := http.NewRequest("GET", requestURL+"?"+form.Encode(), nil)
+
+		if err != nil {
+			return nil, eris.Wrap(err, "Failed to create HTTP request")
+		}
+
+		return req, nil
+	}
+
+	req, err := http.NewRequest("POST", requestURL, strings.NewReader(form.Encode()))
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Failed to create HTTP request")
+	}
+
+	return req, nil
 }
