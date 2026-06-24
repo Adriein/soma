@@ -119,15 +119,13 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 		oauthEscape(normalizedParams),
 	)
 
-	apiKey := os.Getenv(constants.FatSecretApiKey)
+	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
 
-	signingKey := fmt.Sprintf("%s&", oauthEscape(apiKey))
+	signingKey := fmt.Sprintf("%s&", apiKey)
 
 	mac := hmac.New(sha1.New, []byte(signingKey))
 	mac.Write([]byte(signatureBaseString))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-
-	params["oauth_signature"] = signature
 
 	form := url.Values{}
 
@@ -135,7 +133,20 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 		form.Add(k, v)
 	}
 
-	resp, err := http.PostForm(GetRequestTokenURL, form)
+	form.Add("oauth_signature", oauthEscape(signature))
+
+	reqURL, err := url.Parse(GetRequestTokenURL)
+
+	if err != nil {
+		// Handle error
+	}
+
+	// 3. Encode and attach the query parameters
+	// This automatically handles the '?' and URL-encoding for you
+	reqURL.RawQuery = form.Encode()
+
+	// 4. Execute the GET request using the updated string URL
+	resp, err := http.Get(reqURL.String())
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Error doing post request to obtain FatSecret unauthorized token")
@@ -195,7 +206,7 @@ func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
 		oauthEscape(normalizedParams),
 	)
 
-	apiKey := os.Getenv(constants.FatSecretApiKey)
+	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
 
 	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
 
@@ -269,7 +280,7 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 		oauthEscape(normalizedParams),
 	)
 
-	apiKey := os.Getenv(constants.FatSecretApiKey)
+	apiKey := os.Getenv(constants.FatSecretApiKeyOauth1)
 
 	signingKey := fmt.Sprintf("%s&%s&", oauthEscape(apiKey), oauthEscape(oauth.OAuthTokenSecret))
 
@@ -277,7 +288,7 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 	mac.Write([]byte(signatureBaseString))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	params["oauth_signature"] = signature
+	params["oauth_signature"] = oauthEscape(signature)
 
 	form := url.Values{}
 
@@ -321,5 +332,5 @@ func generateNonce() string {
 }
 
 func oauthEscape(s string) string {
-	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+	return strings.NewReplacer("+", "%20", "*", "%2A", "%7E", "~").Replace(url.QueryEscape(s))
 }

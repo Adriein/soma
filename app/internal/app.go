@@ -43,7 +43,8 @@ func NewApp() *App {
 		constants.GeminiApiKey,
 		constants.TelegramBotApiToken,
 		constants.FatSecretClientId,
-		constants.FatSecretApiKey,
+		constants.FatSecretApiKeyOauth1,
+		constants.FatSecretApiKeyOauth2,
 	)
 
 	if envCheckerErr := checker.Check(); envCheckerErr != nil {
