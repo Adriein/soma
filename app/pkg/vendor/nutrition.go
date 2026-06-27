@@ -168,17 +168,9 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 }
 
 func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
-	params := map[string]string{
-		"oauth_token": oauth.OAuthToken,
-	}
+	url := fmt.Sprintf("%s?oauth_token=%s", AuthorizeTokenURL, oauth.OAuthToken)
 
-	_, err := fs.makeRequestAuth(http.MethodGet, AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return &url, nil
 }
 
 func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
