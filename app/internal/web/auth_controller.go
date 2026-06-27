@@ -20,7 +20,15 @@ func NewAuthController(app *internal.App) *AuthController {
 
 func (c *AuthController) Auth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		c.service.ConnectNutritionApp()
+		_, err := c.service.ConnectNutritionApp()
+
+		if err != nil {
+			ginErr := gin.Error{
+				Err: err,
+			}
+
+			ctx.Errors = append(ctx.Errors, &ginErr)
+		}
 
 		ctx.JSON(http.StatusOK, gin.H{"ok": true})
 	}

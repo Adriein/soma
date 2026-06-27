@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -23,11 +22,13 @@ import (
 )
 
 const (
-	GetRequestTokenURL   = "https://authentication.fatsecret.com/oauth/request_token"
-	AuthorizeTokenURL    = "https://authentication.fatsecret.com/oauth/authorize"
-	GetAccessTokenURL    = "https://authentication.fatsecret.com/oauth/access_token"
-	OAuthSignatureMethod = "HMAC-SHA1"
-	OAuthVersion         = "1.0"
+	GetRequestTokenURL               = "https://authentication.fatsecret.com/oauth/request_token"
+	AuthorizeTokenURL                = "https://authentication.fatsecret.com/oauth/authorize"
+	GetAccessTokenURL                = "https://authentication.fatsecret.com/oauth/access_token"
+	OAuthSignatureMethod             = "HMAC-SHA1"
+	OAuthVersion                     = "1.0"
+	FSGetTokenResOAuthTokenKey       = "oauth_token"
+	FSGetTokenResOAuthTokenSecretKey = "oauth_token_secret"
 )
 
 type NutritionDiary interface {
@@ -73,11 +74,6 @@ type FSDiaryEntry struct {
 	Entries struct {
 		Meals []DiaryMeal `json:"food_entry"`
 	} `json:"food_entries"`
-}
-
-type FSTokenRes struct {
-	OAuthToken       string `json:"oauth_token"`
-	OAuthTokenSecret string `json:"oauth_token_secret"`
 }
 
 type FatSecret struct{}
@@ -132,13 +128,14 @@ func (fs *FatSecret) makeRequestAuth(method string, requestURL string, extraPara
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "failed to execute HTTP request")
+		return nil, eris.Wrap(err, "Failed to execute HTTP request")
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+
 	if err != nil {
-		return nil, eris.Wrap(err, "failed to read response body")
+		return nil, eris.Wrap(err, "Failed to read response body")
 	}
 
 	return body, nil
@@ -149,19 +146,24 @@ func (fs *FatSecret) GetToken() (*OAuth, error) {
 		"oauth_callback": "oob",
 	}
 
-	body, err := fs.makeRequestAuth("GET", GetRequestTokenURL, params, "")
+	body, err := fs.makeRequestAuth(http.MethodGet, GetRequestTokenURL, params, "")
+
 	if err != nil {
 		return nil, err
 	}
 
-	var res FSTokenRes
-	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
+	values, err := url.ParseQuery(string(body))
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Failed to parse query string")
 	}
 
+	oauthToken := values.Get(FSGetTokenResOAuthTokenKey)
+	oauthTokenSecret := values.Get(FSGetTokenResOAuthTokenSecretKey)
+
 	return &OAuth{
-		OAuthToken:       res.OAuthToken,
-		OAuthTokenSecret: res.OAuthTokenSecret,
+		OAuthToken:       oauthToken,
+		OAuthTokenSecret: oauthTokenSecret,
 	}, nil
 }
 
@@ -170,17 +172,13 @@ func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
 		"oauth_token": oauth.OAuthToken,
 	}
 
-	body, err := fs.makeRequestAuth("POST", AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
+	_, err := fs.makeRequestAuth(http.MethodGet, AuthorizeTokenURL, params, oauth.OAuthTokenSecret)
+
 	if err != nil {
 		return nil, err
 	}
 
-	var res FSTokenRes
-	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
-	}
-
-	return &res.OAuthToken, nil
+	return nil, nil
 }
 
 func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
@@ -189,14 +187,9 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 		"oauth_verifier": oauth.OauthVerifyCode,
 	}
 
-	body, err := fs.makeRequestAuth("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
+	_, err := fs.makeRequestAuth("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
 	if err != nil {
 		return nil, err
-	}
-
-	var res FSTokenRes
-	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, eris.Wrap(err, "error unmarshaling FatSecret response body")
 	}
 
 	return nil, nil
