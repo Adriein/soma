@@ -1,26 +1,45 @@
 package customer
 
 import (
+	"context"
+	"errors"
+
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
 
+var CustomerAlreadyAuthorized = eris.New("Customer is already authorized")
+
 type CustomerService interface {
-	ConnectNutritionApp() (*string, error)
+	ConnectNutritionApp(ctx context.Context, chatID int64) (*string, error)
 	VerifyToken(tokenSecret string) error
 }
 
 type Service struct {
 	nutritionDiaryAPI vendor.NutritionDiary
+	bot               vendor.Bot
+	repo              CustomerRepository
 }
 
-func NewService(nutritionDiaryAPI vendor.NutritionDiary) *Service {
+func NewService(nutritionDiaryAPI vendor.NutritionDiary, bot vendor.Bot, repo CustomerRepository) *Service {
 	return &Service{
 		nutritionDiaryAPI: nutritionDiaryAPI,
+		bot:               bot,
+		repo:              repo,
 	}
 }
 
-func (s *Service) ConnectNutritionApp() (*string, error) {
+func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) (*string, error) {
+	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
+
+	if customer != nil {
+		return nil, CustomerAlreadyAuthorized
+	}
+
+	if err != nil && !errors.Is(err, ErrCustomerNotFound) {
+		return nil, eris.Wrap(err, "Error getting customer by chat id")
+	}
+
 	oauth, err := s.nutritionDiaryAPI.GetToken()
 
 	if err != nil {
@@ -32,6 +51,10 @@ func (s *Service) ConnectNutritionApp() (*string, error) {
 	if err != nil {
 		return nil, eris.Wrap(err, "Error authorizing the token")
 	}
+
+	//TODO: send a button to telegram with the authURL
+	//TODO: I have to alter the database to remove email and make chatID as identifier value unique
+	s.bot.SendMessage()
 
 	return authURL, nil
 }

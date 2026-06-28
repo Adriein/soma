@@ -1,8 +1,8 @@
 package customer
 
 type Customer struct {
-	Name string
-	Age int
-	Weight float32
-	Height float32
+	ID                    int
+	Name                  string
+	TelegramChatID        int64
+	TelegramLastMessageID int
 }

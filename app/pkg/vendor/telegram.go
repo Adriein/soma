@@ -53,6 +53,10 @@ type GetUpdatesRes struct {
 	Result []TelegramUpdate `json:"result"`
 }
 
+type Bot interface {
+	SendMessage() error
+}
+
 type TelegramBot struct {
 	ch  chan<- TelegramUpdate
 	url string
@@ -135,4 +139,8 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 		}
 
 	}
+}
+
+func (b *TelegramBot) SendMessage() error {
+	return nil
 }

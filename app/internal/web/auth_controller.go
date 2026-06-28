@@ -20,7 +20,7 @@ func NewAuthController(app *internal.App) *AuthController {
 
 func (c *AuthController) Auth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		authURL, err := c.service.ConnectNutritionApp()
+		authURL, err := c.service.ConnectNutritionApp(ctx, 1)
 
 		if err != nil {
 			ginErr := gin.Error{

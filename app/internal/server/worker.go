@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/adriein/soma/app/internal"
+	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
 )
 
 type Worker struct {
-	logger *slog.Logger
-	ch     <-chan vendor.TelegramUpdate
+	logger       *slog.Logger
+	ch           <-chan vendor.TelegramUpdate
+	customerServ customer.CustomerService
 }
 
-func NewWorker(logger *slog.Logger, ch <-chan vendor.TelegramUpdate) *Worker {
+func NewWorker(app *internal.App, ch <-chan vendor.TelegramUpdate) *Worker {
 	return &Worker{
-		logger: logger,
-		ch:     ch,
+		logger:       app.Logger,
+		ch:           ch,
+		customerServ: app.Modules.Customer,
 	}
 }
 
@@ -32,11 +36,22 @@ func (w *Worker) Dispatch(ctx context.Context) {
 				return
 			}
 
-			w.handleUpdate(update)
+			w.handleUpdate(ctx, update)
 		}
 	}
 }
 
-func (w *Worker) handleUpdate(update vendor.TelegramUpdate) {
+func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate) {
+	w.logger.Info("Dispatched update")
+	switch update.Message.Text {
+	case "/start":
+		w.handleAuth(ctx, update)
+	}
 	fmt.Printf("Dispatched update: %+v\n", update)
+}
+
+func (w *Worker) handleAuth(ctx context.Context, update vendor.TelegramUpdate) error {
+	w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID)
+
+	return nil
 }

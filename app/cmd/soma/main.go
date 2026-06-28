@@ -18,7 +18,7 @@ func main() {
 	if len(os.Args) < 2 {
 		ch := make(chan vendor.TelegramUpdate, 20)
 
-		worker := server.NewWorker(app.Logger, ch)
+		worker := server.NewWorker(app, ch)
 		telegram := vendor.NewTelegramBot(ch)
 
 		ctx, cancel := context.WithCancel(context.Background())

@@ -86,7 +86,8 @@ func initLogger() *slog.Logger {
 
 func initModules(db *sql.DB, logger *slog.Logger) *Modules {
 	fsApi := vendor.NewFatSecret()
-	customerServ := customer.NewService(fsApi)
+	repo := customer.NewPgCustomerRepository(db)
+	customerServ := customer.NewService(fsApi, repo)
 
 	return &Modules{
 		Customer: customerServ,
