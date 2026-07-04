@@ -20,7 +20,7 @@ func NewAuthController(app *internal.App) *AuthController {
 
 func (c *AuthController) Auth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		authURL, err := c.service.ConnectNutritionApp(ctx, 1)
+		err := c.service.ConnectNutritionApp(ctx, 1)
 
 		if err != nil {
 			ginErr := gin.Error{
@@ -29,8 +29,6 @@ func (c *AuthController) Auth() gin.HandlerFunc {
 
 			ctx.Errors = append(ctx.Errors, &ginErr)
 		}
-
-		ctx.Redirect(http.StatusTemporaryRedirect, *authURL)
 	}
 }
 

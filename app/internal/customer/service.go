@@ -11,7 +11,7 @@ import (
 var CustomerAlreadyAuthorized = eris.New("Customer is already authorized")
 
 type CustomerService interface {
-	ConnectNutritionApp(ctx context.Context, chatID int64) (*string, error)
+	ConnectNutritionApp(ctx context.Context, chatID int64) error
 	VerifyToken(tokenSecret string) error
 }
 
@@ -29,27 +29,27 @@ func NewService(nutritionDiaryAPI vendor.NutritionDiary, bot vendor.Bot, repo Cu
 	}
 }
 
-func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) (*string, error) {
+func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) error {
 	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
 
 	if customer != nil {
-		return nil, CustomerAlreadyAuthorized
+		return CustomerAlreadyAuthorized
 	}
 
 	if err != nil && !errors.Is(err, ErrCustomerNotFound) {
-		return nil, eris.Wrap(err, "Error getting customer by chat id")
+		return eris.Wrap(err, "Error getting customer by chat id")
 	}
 
 	oauth, err := s.nutritionDiaryAPI.GetToken()
 
 	if err != nil {
-		return nil, eris.Wrap(err, "Error getting the unauthorized token")
+		return eris.Wrap(err, "Error getting the unauthorized token")
 	}
 
 	authURL, err := s.nutritionDiaryAPI.AuthorizeToken(oauth)
 
 	if err != nil {
-		return nil, eris.Wrap(err, "Error authorizing the token")
+		return eris.Wrap(err, "Error authorizing the token")
 	}
 
 	payload := vendor.OutgoingMessage{
@@ -64,9 +64,11 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) (*strin
 		},
 	}
 
-	s.bot.SendMessage(ctx, payload)
+	if err := s.bot.SendMessage(ctx, payload); err != nil {
+		return eris.Wrap(err, "Error sending msg to telegram")
+	}
 
-	return authURL, nil
+	return nil
 }
 
 func (s *Service) VerifyToken(tokenSecret string) error {
