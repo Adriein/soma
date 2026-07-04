@@ -26,21 +26,25 @@ func NewPgCustomerRepository(c *sql.DB) *PgCustomerRepsitory {
 func (r *PgCustomerRepsitory) Save(ctx context.Context, customer *Customer) error {
 	query := `
 		INSERT INTO so_users (
-			sou_name,
 			sou_telegram_chat_id,
-			sou_current_message_id,
+			sou_name,
+			sou_token,
+			sou_token_secret,
+			sou_token_verifier,
 			sou_date_add,
 			sou_date_upd
 		)
-		VALUES ($1, $2, $3, TIMEZONE('UTC', NOW()), TIMEZONE('UTC', NOW()))
+		VALUES ($1, $2, $3, $4, $5, TIMEZONE('UTC', NOW()), TIMEZONE('UTC', NOW()))
 	`
 
 	_, err := r.connection.ExecContext(
 		ctx,
 		query,
-		customer.Name,
 		customer.TelegramChatID,
-		customer.TelegramLastMessageID,
+		customer.Name,
+		customer.Token,
+		customer.TokenSecret,
+		customer.TokenVerifier,
 	)
 
 	if err != nil {
@@ -56,7 +60,9 @@ func (r *PgCustomerRepsitory) GetByTelegramChatID(ctx context.Context, chatID in
 			sou_id,
 			sou_name,
 			sou_telegram_chat_id,
-			sou_current_message_id
+			sou_token,
+			sou_token_secret,
+			sou_token_verifier
 		FROM so_users
 		WHERE sou_telegram_chat_id = $1
 	`
@@ -67,7 +73,9 @@ func (r *PgCustomerRepsitory) GetByTelegramChatID(ctx context.Context, chatID in
 		&customer.ID,
 		&customer.Name,
 		&customer.TelegramChatID,
-		&customer.TelegramLastMessageID,
+		&customer.Token,
+		&customer.TokenSecret,
+		&customer.TokenVerifier,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, eris.Wrapf(ErrCustomerNotFound, "No customer found with the chat id: %d", chatID)

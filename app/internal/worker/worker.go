@@ -65,5 +65,5 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 }
 
 func (w *Worker) handleAuth(ctx context.Context, update vendor.TelegramUpdate) error {
-	return w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID)
+	return w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID, update.Message.From.FirstName)
 }

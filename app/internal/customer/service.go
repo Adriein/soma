@@ -3,6 +3,7 @@ package customer
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
@@ -11,7 +12,7 @@ import (
 var CustomerAlreadyAuthorized = eris.New("Customer is already authorized")
 
 type CustomerService interface {
-	ConnectNutritionApp(ctx context.Context, chatID int64) error
+	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
 	VerifyToken(tokenSecret string) error
 }
 
@@ -29,7 +30,7 @@ func NewService(nutritionDiaryAPI vendor.NutritionDiary, bot vendor.Bot, repo Cu
 	}
 }
 
-func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) error {
+func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error {
 	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
 
 	if customer != nil {
@@ -46,15 +47,35 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) error {
 		return eris.Wrap(err, "Error getting the unauthorized token")
 	}
 
+	customer = &Customer{
+		Name:           customerName,
+		TelegramChatID: chatID,
+		Token:          oauth.OAuthToken,
+		TokenSecret:    oauth.OAuthTokenSecret,
+	}
+
+	if err := s.repo.Save(ctx, customer); err != nil {
+		return eris.Wrap(err, "Error saving the customer")
+	}
+
 	authURL, err := s.nutritionDiaryAPI.AuthorizeToken(oauth)
 
 	if err != nil {
 		return eris.Wrap(err, "Error authorizing the token")
 	}
 
+	text := fmt.Sprintf(
+		`👋 *Hello %s, welcome to Soma\!*
+		To automatically sync your nutrition data, we just need to connect your accounts\.
+		🔐 Tap the *Authorize* button below to grant us permission to read your *FatSecret* food entries and paste the code into the DB\.
+		_You will be safely redirected to the official FatSecret authorization page\._`,
+		customer.Name,
+	)
+
 	payload := vendor.OutgoingMessage{
-		ChatID: chatID,
-		Text:   "The following button redirects you to Fatsecret Auth page, you must give us permisions to read your food entries",
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: "MarkdownV2",
 		ReplyMarkup: vendor.InlineKeyboardMarkup{
 			InlineKeyboard: [][]vendor.InlineKeyboardButton{
 				{
