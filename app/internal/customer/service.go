@@ -52,9 +52,19 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64) (*strin
 		return nil, eris.Wrap(err, "Error authorizing the token")
 	}
 
-	//TODO: send a button to telegram with the authURL
-	//TODO: I have to alter the database to remove email and make chatID as identifier value unique
-	s.bot.SendMessage()
+	payload := vendor.OutgoingMessage{
+		ChatID: chatID,
+		Text:   "The following button redirects you to Fatsecret Auth page, you must give us permisions to read your food entries",
+		ReplyMarkup: vendor.InlineKeyboardMarkup{
+			InlineKeyboard: [][]vendor.InlineKeyboardButton{
+				{
+					{Text: "Authorize", Url: *authURL},
+				},
+			},
+		},
+	}
+
+	s.bot.SendMessage(ctx, payload)
 
 	return authURL, nil
 }

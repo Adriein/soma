@@ -29,7 +29,7 @@ type TelegramChat struct {
 	Type string `json:"type"`
 }
 
-type TelegramMessage struct {
+type IncomingMessage struct {
 	ID       int          `json:"message_id"`
 	ThreadID int          `json:"message_thread_id"`
 	From     TelegramUser `json:"from"`
@@ -39,7 +39,7 @@ type TelegramMessage struct {
 }
 type TelegramUpdate struct {
 	ID      int             `json:"update_id"`
-	Message TelegramMessage `json:"message"`
+	Message IncomingMessage `json:"message"`
 	Err     error
 }
 
@@ -53,8 +53,24 @@ type GetUpdatesRes struct {
 	Result []TelegramUpdate `json:"result"`
 }
 
+type InlineKeyboardMarkup struct {
+	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
+}
+
+type InlineKeyboardButton struct {
+	Text string `json:"text"`
+	Url  string `json:"url"`
+}
+
+type OutgoingMessage struct {
+	ChatID      int64                `json:"chat_id"`
+	Text        string               `json:"text"`
+	ReplyMarkup InlineKeyboardMarkup `json:"reply_markup"`
+}
+
 type Bot interface {
-	SendMessage() error
+	Poll(ctx context.Context)
+	SendMessage(ctx context.Context, payload OutgoingMessage) error
 }
 
 type TelegramBot struct {
@@ -141,6 +157,30 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 	}
 }
 
-func (b *TelegramBot) SendMessage() error {
+func (b *TelegramBot) SendMessage(ctx context.Context, payload OutgoingMessage) error {
+	body, err := json.Marshal(payload)
+
+	if err != nil {
+		return eris.Wrap(err, "Error marshalling payload")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url, bytes.NewReader(body))
+
+	if err != nil {
+		return eris.Wrap(err, "Error creating the request")
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return eris.Wrap(err, "Error doing the request")
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return eris.Wrap(err, "Error, http status is not 200")
+	}
+
 	return nil
 }
