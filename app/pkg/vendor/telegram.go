@@ -69,33 +69,31 @@ type OutgoingMessage struct {
 }
 
 type Bot interface {
-	Poll(ctx context.Context)
+	Poll(ctx context.Context, ch chan<- TelegramUpdate)
 	SendMessage(ctx context.Context, payload OutgoingMessage) error
 }
 
 type TelegramBot struct {
-	ch  chan<- TelegramUpdate
 	url string
 }
 
-func NewTelegramBot(ch chan<- TelegramUpdate) *TelegramBot {
+func NewTelegramBot() *TelegramBot {
 	token := os.Getenv(constants.TelegramBotApiToken)
 	url := fmt.Sprintf("%s/bot%s/%s", TelegramApiURL, token, TelegramApiGetUpdatesMethod)
 
 	return &TelegramBot{
-		ch:  ch,
 		url: url,
 	}
 }
 
-func (b *TelegramBot) notify(ctx context.Context, update TelegramUpdate) {
+func (b *TelegramBot) notify(ctx context.Context, ch chan<- TelegramUpdate, update TelegramUpdate) {
 	select {
-	case b.ch <- update:
+	case ch <- update:
 	case <-ctx.Done():
 	}
 }
 
-func (b *TelegramBot) Poll(ctx context.Context) {
+func (b *TelegramBot) Poll(ctx context.Context, ch chan<- TelegramUpdate) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -109,7 +107,7 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 		body, err := json.Marshal(payload)
 
 		if err != nil {
-			b.notify(ctx, TelegramUpdate{Err: eris.Wrap(err, "Failed encoding payload")})
+			b.notify(ctx, ch, TelegramUpdate{Err: eris.Wrap(err, "Failed encoding payload")})
 			time.Sleep(time.Second * 2)
 			continue
 		}
@@ -117,7 +115,7 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url, bytes.NewReader(body))
 
 		if err != nil {
-			b.notify(ctx, TelegramUpdate{Err: eris.Wrap(err, "Failed creating the request")})
+			b.notify(ctx, ch, TelegramUpdate{Err: eris.Wrap(err, "Failed creating the request")})
 			time.Sleep(time.Second * 2)
 			return
 		}
@@ -127,13 +125,13 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 		res, err := http.DefaultClient.Do(req)
 
 		if err != nil {
-			b.notify(ctx, TelegramUpdate{Err: eris.Wrap(err, "Failed doing the request")})
+			b.notify(ctx, ch, TelegramUpdate{Err: eris.Wrap(err, "Failed doing the request")})
 			time.Sleep(time.Second * 2)
 			return
 		}
 
 		if res.StatusCode != http.StatusOK {
-			b.notify(ctx, TelegramUpdate{Err: eris.Errorf("Error with status code %d", res.StatusCode)})
+			b.notify(ctx, ch, TelegramUpdate{Err: eris.Errorf("Error with status code %d", res.StatusCode)})
 			res.Body.Close()
 			time.Sleep(time.Second * 2)
 			return
@@ -144,14 +142,14 @@ func (b *TelegramBot) Poll(ctx context.Context) {
 		res.Body.Close()
 
 		if err != nil {
-			b.notify(ctx, TelegramUpdate{Err: eris.Wrap(err, "Error decoding json")})
+			b.notify(ctx, ch, TelegramUpdate{Err: eris.Wrap(err, "Error decoding json")})
 			res.Body.Close()
 			time.Sleep(time.Second * 2)
 			return
 		}
 
 		for _, update := range response.Result {
-			b.notify(ctx, update)
+			b.notify(ctx, ch, update)
 		}
 
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/adriein/soma/app/database"
 	"github.com/adriein/soma/app/internal/customer"
+	"github.com/adriein/soma/app/internal/worker"
 	"github.com/adriein/soma/app/pkg/constants"
 	"github.com/adriein/soma/app/pkg/helper"
 	"github.com/adriein/soma/app/pkg/vendor"
@@ -17,6 +18,7 @@ import (
 
 type Modules struct {
 	Customer customer.CustomerService
+	Worker   *worker.Worker
 }
 
 type App struct {
@@ -85,11 +87,16 @@ func initLogger() *slog.Logger {
 }
 
 func initModules(db *sql.DB, logger *slog.Logger) *Modules {
+	telegram := vendor.NewTelegramBot()
 	fsApi := vendor.NewFatSecret()
-	repo := customer.NewPgCustomerRepository(db)
-	customerServ := customer.NewService(fsApi, repo)
+
+	customerRepo := customer.NewPgCustomerRepository(db)
+	customerServ := customer.NewService(fsApi, telegram, customerRepo)
+
+	worker := worker.New(customerServ, logger, telegram)
 
 	return &Modules{
 		Customer: customerServ,
+		Worker:   worker,
 	}
 }

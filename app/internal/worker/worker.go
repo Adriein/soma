@@ -1,36 +1,45 @@
-package server
+package worker
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
 
-	"github.com/adriein/soma/app/internal"
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
 )
 
 type Worker struct {
 	logger       *slog.Logger
-	ch           <-chan vendor.TelegramUpdate
 	customerServ customer.CustomerService
+	telegram     vendor.Bot
+	ch           chan vendor.TelegramUpdate
 }
 
-func NewWorker(app *internal.App, ch <-chan vendor.TelegramUpdate) *Worker {
+func New(customerServ customer.CustomerService, logger *slog.Logger, telegram vendor.Bot) *Worker {
+	ch := make(chan vendor.TelegramUpdate, 20)
+
 	return &Worker{
-		logger:       app.Logger,
+		logger:       logger,
+		telegram:     telegram,
+		customerServ: customerServ,
 		ch:           ch,
-		customerServ: app.Modules.Customer,
 	}
 }
 
-func (w *Worker) Dispatch(ctx context.Context) {
+func (w *Worker) Start(ctx context.Context) {
+	go w.Dispatch(ctx, w.ch)
+
+	go w.telegram.Poll(ctx, w.ch)
+}
+
+func (w *Worker) Dispatch(ctx context.Context, ch <-chan vendor.TelegramUpdate) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		case update, ok := <-w.ch:
+		case update, ok := <-ch:
 			if !ok {
 				w.logger.Info("Channel closed. Exiting dispatcher loop.")
 				return
