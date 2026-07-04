@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	TelegramApiURL              = "https://api.telegram.org"
-	TelegramApiGetUpdatesMethod = "getUpdates"
+	TelegramApiURL               = "https://api.telegram.org"
+	TelegramApiGetUpdatesMethod  = "getUpdates"
+	TelegramApiSendMessageMethod = "sendMessage"
 )
 
 type TelegramUser struct {
@@ -79,7 +80,7 @@ type TelegramBot struct {
 
 func NewTelegramBot() *TelegramBot {
 	token := os.Getenv(constants.TelegramBotApiToken)
-	url := fmt.Sprintf("%s/bot%s/%s", TelegramApiURL, token, TelegramApiGetUpdatesMethod)
+	url := fmt.Sprintf("%s/bot%s", TelegramApiURL, token)
 
 	return &TelegramBot{
 		url: url,
@@ -94,6 +95,8 @@ func (b *TelegramBot) notify(ctx context.Context, ch chan<- TelegramUpdate, upda
 }
 
 func (b *TelegramBot) Poll(ctx context.Context, ch chan<- TelegramUpdate) {
+	messageOffset := 0
+
 	for {
 		if ctx.Err() != nil {
 			return
@@ -101,7 +104,7 @@ func (b *TelegramBot) Poll(ctx context.Context, ch chan<- TelegramUpdate) {
 
 		payload := GetUpdatesPayload{
 			Timeout: 30,
-			Offset:  1,
+			Offset:  messageOffset,
 		}
 
 		body, err := json.Marshal(payload)
@@ -112,7 +115,9 @@ func (b *TelegramBot) Poll(ctx context.Context, ch chan<- TelegramUpdate) {
 			continue
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url, bytes.NewReader(body))
+		url := fmt.Sprintf("%s/%s", b.url, TelegramApiGetUpdatesMethod)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 
 		if err != nil {
 			b.notify(ctx, ch, TelegramUpdate{Err: eris.Wrap(err, "Failed creating the request")})
@@ -150,8 +155,8 @@ func (b *TelegramBot) Poll(ctx context.Context, ch chan<- TelegramUpdate) {
 
 		for _, update := range response.Result {
 			b.notify(ctx, ch, update)
+			messageOffset = update.ID + 1
 		}
-
 	}
 }
 
@@ -162,7 +167,9 @@ func (b *TelegramBot) SendMessage(ctx context.Context, payload OutgoingMessage) 
 		return eris.Wrap(err, "Error marshalling payload")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url, bytes.NewReader(body))
+	url := fmt.Sprintf("%s/%s", b.url, TelegramApiSendMessageMethod)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 
 	if err != nil {
 		return eris.Wrap(err, "Error creating the request")

@@ -7,6 +7,7 @@ import (
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
+	"github.com/rotisserie/eris"
 )
 
 type Worker struct {
@@ -54,7 +55,11 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 	w.logger.Info("Dispatched update")
 	switch update.Message.Text {
 	case "/start":
-		w.handleAuth(ctx, update)
+		err := w.handleAuth(ctx, update)
+
+		if err != nil {
+			w.logger.Error(eris.ToString(err, true))
+		}
 	}
 	fmt.Printf("Dispatched update: %+v\n", update)
 }
