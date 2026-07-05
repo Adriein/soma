@@ -12,7 +12,7 @@ import (
 
 type CustomerService interface {
 	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
-	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier string) error
+	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier int) error
 }
 
 type Service struct {
