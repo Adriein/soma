@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -67,7 +68,7 @@ type OutgoingMessage struct {
 	ChatID      int64                `json:"chat_id"`
 	Text        string               `json:"text"`
 	ParseMode   string               `json:"parse_mode"`
-	ReplyMarkup InlineKeyboardMarkup `json:"reply_markup"`
+	ReplyMarkup *InlineKeyboardMarkup `json:"reply_markup,omitempty"`
 }
 
 type Bot interface {
@@ -184,8 +185,18 @@ func (b *TelegramBot) SendMessage(ctx context.Context, payload OutgoingMessage) 
 		return eris.Wrap(err, "Error doing the request")
 	}
 
+	defer res.Body.Close()
+
 	if res.StatusCode != http.StatusOK {
-		return eris.Wrap(err, "Error, http status is not 200")
+		bodyBytes, readErr := io.ReadAll(res.Body)
+
+		if readErr != nil {
+			return eris.Errorf("HTTP %d: failed to read error response body: %v", res.StatusCode, readErr)
+		}
+
+		serverErrorMsg := string(bodyBytes)
+
+		return eris.Errorf("HTTP %d: %s", res.StatusCode, serverErrorMsg)
 	}
 
 	return nil

@@ -36,8 +36,8 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	if customer != nil {
 		var markdown strings.Builder
 
-		greetings := fmt.Sprintf("👋 *Hello %s\\!*\n\n", customer.Name)
-		info := "You have already connected *FatSecret*, to proceed just type /assessment\\.\n\n"
+		greetings := fmt.Sprintf("👋 *Hello %s\\!*\n", customer.Name)
+		info := "You have already connected *FatSecret*, to proceed just type /assessment\\."
 
 		markdown.WriteString(greetings)
 		markdown.WriteString(info)
@@ -72,10 +72,6 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 		TokenSecret:    oauth.OAuthTokenSecret,
 	}
 
-	if err := s.repo.Save(ctx, customer); err != nil {
-		return eris.Wrap(err, "Error saving the customer")
-	}
-
 	authURL, err := s.nutritionDiaryAPI.AuthorizeToken(oauth)
 
 	if err != nil {
@@ -85,9 +81,9 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	var markdown strings.Builder
 
 	greetings := fmt.Sprintf("👋 *Hello %s, welcome to Soma\\!*\n\n", customer.Name)
-	info := "Let's sync your nutrition data! To get started, we just need to connect your *FatSecret* account\\.\n\n"
+	info := "Let's sync your nutrition data\\! To get started, we just need to connect your *FatSecret* account\\.\n\n"
 	instructions := "🔐 Tap the *Authorize* button below to get your secure code\\.\n"
-	nextSteps := "Once you have your code, come back here and reply with */auth <your_code>*\\.\n\n"
+	nextSteps := "Once you have your code, come back here and reply with: `/auth \\<your_code\\>`\\.\n\n"
 	footer := "_You will be safely redirected to the official FatSecret authorization page\\._"
 
 	markdown.WriteString(greetings)
@@ -100,7 +96,7 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 		ChatID:    chatID,
 		Text:      markdown.String(),
 		ParseMode: "MarkdownV2",
-		ReplyMarkup: vendor.InlineKeyboardMarkup{
+		ReplyMarkup: &vendor.InlineKeyboardMarkup{
 			InlineKeyboard: [][]vendor.InlineKeyboardButton{
 				{
 					{Text: "Authorize", Url: *authURL},
@@ -111,6 +107,10 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 
 	if err := s.bot.SendMessage(ctx, payload); err != nil {
 		return eris.Wrap(err, "Error sending msg to telegram")
+	}
+
+	if err := s.repo.Save(ctx, customer); err != nil {
+		return eris.Wrap(err, "Error saving the customer")
 	}
 
 	return nil
