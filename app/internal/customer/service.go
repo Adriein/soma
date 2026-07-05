@@ -12,7 +12,7 @@ import (
 
 type CustomerService interface {
 	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
-	VerifyToken(tokenSecret string) error
+	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier string) error
 }
 
 type Service struct {
@@ -84,13 +84,15 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	var markdown strings.Builder
 
 	greetings := fmt.Sprintf("👋 *Hello %s, welcome to Soma\\!*\n\n", customer.Name)
-	info := "To automatically sync your nutrition data, we just need to connect your accounts\\.\n\n"
-	instructions := "🔐 Tap the *Authorize* button below to grant us permission to read your *FatSecret* food entries and paste the code into the DB\\.\n\n"
+	info := "Let's sync your nutrition data! To get started, we just need to connect your *FatSecret* account\\.\n\n"
+	instructions := "🔐 Tap the *Authorize* button below to get your secure code\\.\n"
+	nextSteps := "Once you have your code, come back here and reply with */auth <your_code>*\\.\n\n"
 	footer := "_You will be safely redirected to the official FatSecret authorization page\\._"
 
 	markdown.WriteString(greetings)
 	markdown.WriteString(info)
 	markdown.WriteString(instructions)
+	markdown.WriteString(nextSteps)
 	markdown.WriteString(footer)
 
 	payload := vendor.OutgoingMessage{
@@ -113,6 +115,31 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	return nil
 }
 
-func (s *Service) VerifyToken(tokenSecret string) error {
+func (s *Service) ExchangeToken(ctx context.Context, chatID int64, tokenVerifier int) error {
+	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
+
+	if err != nil {
+		return eris.Wrap(err, "Error fetching the customer")
+	}
+
+	payload := &vendor.OAuth{
+		OAuthToken:       customer.Token,
+		OAuthTokenSecret: customer.TokenSecret,
+		OauthVerifyCode:  customer.TokenVerifier,
+	}
+
+	oauth, err := s.nutritionDiaryAPI.VerifyToken(payload)
+
+	if err != nil {
+		return eris.Wrap(err, "Error exchanging the token")
+	}
+
+	customer.Token = oauth.OAuthToken
+	customer.TokenVerifier = tokenVerifier
+
+	if err := s.repo.Save(ctx, customer); err != nil {
+		return eris.Wrap(err, "Error updating the customer")
+	}
+
 	return nil
 }

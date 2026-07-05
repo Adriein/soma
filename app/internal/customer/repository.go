@@ -35,6 +35,13 @@ func (r *PgCustomerRepsitory) Save(ctx context.Context, customer *Customer) erro
 			sou_date_upd
 		)
 		VALUES ($1, $2, $3, $4, $5, TIMEZONE('UTC', NOW()), TIMEZONE('UTC', NOW()))
+		ON CONFLICT (sou_telegram_chat_id)
+		DO UPDATE SET
+			sou_name           = EXCLUDED.sou_name,
+			sou_token          = EXCLUDED.sou_token,
+			sou_token_secret   = EXCLUDED.sou_token_secret,
+			sou_token_verifier = EXCLUDED.sou_token_verifier,
+			sou_date_upd       = TIMEZONE('UTC', NOW());
 	`
 
 	_, err := r.connection.ExecContext(

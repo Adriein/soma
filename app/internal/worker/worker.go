@@ -57,7 +57,13 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 
 	switch update.Message.Text {
 	case "/start":
-		err := w.handleAuth(ctx, update)
+		err := w.handleConnect(ctx, update)
+
+		if err != nil {
+			w.logger.Error(eris.ToString(err, true))
+		}
+	case "/auth":
+		err := w.handleExchangeToken(ctx, update)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
@@ -72,8 +78,12 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 	fmt.Printf("Dispatched update: %+v\n", update)
 }
 
-func (w *Worker) handleAuth(ctx context.Context, update vendor.TelegramUpdate) error {
+func (w *Worker) handleConnect(ctx context.Context, update vendor.TelegramUpdate) error {
 	return w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID, update.Message.From.FirstName)
+}
+
+func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.TelegramUpdate) error {
+	return w.customerServ.ExchangeToken(ctx, update.Message.Chat.ID, update.Message.Text)
 }
 
 func (w *Worker) handleAssessment(ctx context.Context) error {

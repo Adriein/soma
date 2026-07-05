@@ -40,7 +40,7 @@ type NutritionDiary interface {
 type OAuth struct {
 	OAuthToken       string
 	OAuthTokenSecret string
-	OauthVerifyCode  string
+	OauthVerifyCode  int
 }
 
 type DiaryMeal struct {
@@ -176,15 +176,29 @@ func (fs *FatSecret) AuthorizeToken(oauth *OAuth) (*string, error) {
 func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 	params := map[string]string{
 		"oauth_token":    oauth.OAuthToken,
-		"oauth_verifier": oauth.OauthVerifyCode,
+		"oauth_verifier": strconv.Itoa(oauth.OauthVerifyCode),
 	}
 
-	_, err := fs.makeRequestAuth("POST", GetAccessTokenURL, params, oauth.OAuthTokenSecret)
+	body, err := fs.makeRequestAuth(http.MethodGet, GetAccessTokenURL, params, oauth.OAuthTokenSecret)
+
 	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	values, err := url.ParseQuery(string(body))
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Failed to parse query string")
+	}
+
+	oauthToken := values.Get(FSGetTokenResOAuthTokenKey)
+	oauthTokenSecret := values.Get(FSGetTokenResOAuthTokenSecretKey)
+
+	return &OAuth{
+		OAuthToken:       oauthToken,
+		OAuthTokenSecret: oauthTokenSecret,
+		OauthVerifyCode:  oauth.OauthVerifyCode,
+	}, nil
 }
 
 func (fs *FatSecret) generateNonce() string {
@@ -192,7 +206,6 @@ func (fs *FatSecret) generateNonce() string {
 
 	result := make([]byte, 11)
 	for i := range result {
-		// Generate a random index between 0 and len(charset)-1
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 		if err != nil {
 			return ""
@@ -229,15 +242,15 @@ func (fs *FatSecret) buildSigningKey(tokenSecret string) string {
 	consumerSecret := os.Getenv(constants.FatSecretApiKeyOauth1)
 
 	if tokenSecret != "" {
-		return fmt.Sprintf("%s&%s&", fs.oauthEscape(consumerSecret), fs.oauthEscape(tokenSecret))
+		return fmt.Sprintf("%s&%s", fs.oauthEscape(consumerSecret), fs.oauthEscape(tokenSecret))
 	}
 
 	return fmt.Sprintf("%s&", fs.oauthEscape(consumerSecret))
 }
 
 func (fs *FatSecret) buildRequest(method string, requestURL string, form url.Values) (*http.Request, error) {
-	if method == "GET" {
-		req, err := http.NewRequest("GET", requestURL+"?"+form.Encode(), nil)
+	if method == http.MethodGet {
+		req, err := http.NewRequest(http.MethodGet, requestURL+"?"+form.Encode(), nil)
 
 		if err != nil {
 			return nil, eris.Wrap(err, "Failed to create HTTP request")
@@ -246,7 +259,7 @@ func (fs *FatSecret) buildRequest(method string, requestURL string, form url.Val
 		return req, nil
 	}
 
-	req, err := http.NewRequest("POST", requestURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(form.Encode()))
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Failed to create HTTP request")
