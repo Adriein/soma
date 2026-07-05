@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
-
-var CustomerAlreadyAuthorized = eris.New("Customer is already authorized")
 
 type CustomerService interface {
 	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
@@ -34,7 +33,25 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
 
 	if customer != nil {
-		return CustomerAlreadyAuthorized
+		var markdown strings.Builder
+
+		greetings := fmt.Sprintf("👋 *Hello %s\\!*\n\n", customer.Name)
+		info := "You have already connected *FatSecret*, to proceed just type /assessment\\.\n\n"
+
+		markdown.WriteString(greetings)
+		markdown.WriteString(info)
+
+		payload := vendor.OutgoingMessage{
+			ChatID:    chatID,
+			Text:      markdown.String(),
+			ParseMode: "MarkdownV2",
+		}
+
+		if err := s.bot.SendMessage(ctx, payload); err != nil {
+			return eris.Wrap(err, "Error sending msg to telegram")
+		}
+
+		return nil
 	}
 
 	if err != nil && !errors.Is(err, ErrCustomerNotFound) {
@@ -64,17 +81,21 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 		return eris.Wrap(err, "Error authorizing the token")
 	}
 
-	text := fmt.Sprintf(
-		`👋 *Hello %s, welcome to Soma\!*
-		To automatically sync your nutrition data, we just need to connect your accounts\.
-		🔐 Tap the *Authorize* button below to grant us permission to read your *FatSecret* food entries and paste the code into the DB\.
-		_You will be safely redirected to the official FatSecret authorization page\._`,
-		customer.Name,
-	)
+	var markdown strings.Builder
+
+	greetings := fmt.Sprintf("👋 *Hello %s, welcome to Soma\\!*\n\n", customer.Name)
+	info := "To automatically sync your nutrition data, we just need to connect your accounts\\.\n\n"
+	instructions := "🔐 Tap the *Authorize* button below to grant us permission to read your *FatSecret* food entries and paste the code into the DB\\.\n\n"
+	footer := "_You will be safely redirected to the official FatSecret authorization page\\._"
+
+	markdown.WriteString(greetings)
+	markdown.WriteString(info)
+	markdown.WriteString(instructions)
+	markdown.WriteString(footer)
 
 	payload := vendor.OutgoingMessage{
 		ChatID:    chatID,
-		Text:      text,
+		Text:      markdown.String(),
 		ParseMode: "MarkdownV2",
 		ReplyMarkup: vendor.InlineKeyboardMarkup{
 			InlineKeyboard: [][]vendor.InlineKeyboardButton{
