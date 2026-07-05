@@ -1,8 +1,6 @@
 package web
 
 import (
-	"net/http"
-
 	"github.com/adriein/soma/app/internal"
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/gin-gonic/gin"
@@ -29,13 +27,5 @@ func (c *AuthController) Auth() gin.HandlerFunc {
 
 			ctx.Errors = append(ctx.Errors, &ginErr)
 		}
-	}
-}
-
-func (c *AuthController) AuthWebhook() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		c.service.VerifyToken("")
-
-		ctx.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
