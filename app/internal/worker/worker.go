@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
@@ -55,15 +56,25 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 	w.logger.Info("Dispatched update")
 	w.logger.Debug(fmt.Sprintf("Dispatched update: %+v\n", update))
 
-	switch update.Message.Text {
+	args := strings.Fields(update.Message.Text)
+
+	if len(args) == 0 {
+		w.logger.Error("No command provided")
+
+		return
+	}
+
+	command := args[0]
+
+	switch command {
 	case "/start":
 		err := w.handleConnect(ctx, update)
 
 		if err != nil {
-			w.logger.Error(eris.ToString(err, true))
+			w.logger.Error("Failed connection", "error_details", eris.ToJSON(err, true))
 		}
 	case "/auth":
-		err := w.handleExchangeToken(ctx, update)
+		err := w.handleExchangeToken(ctx, update, args)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
@@ -74,16 +85,19 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
 		}
+	default:
+		w.logger.Error(fmt.Sprintf("Command %s not implemented", command))
 	}
-	fmt.Printf("Dispatched update: %+v\n", update)
 }
 
 func (w *Worker) handleConnect(ctx context.Context, update vendor.TelegramUpdate) error {
 	return w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID, update.Message.From.FirstName)
 }
 
-func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.TelegramUpdate) error {
-	return w.customerServ.ExchangeToken(ctx, update.Message.Chat.ID, update.Message.Text)
+func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.TelegramUpdate, args []string) error {
+	verificator := args[1]
+
+	return w.customerServ.ExchangeToken(ctx, update.Message.Chat.ID, verificator)
 }
 
 func (w *Worker) handleAssessment(ctx context.Context) error {
