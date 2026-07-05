@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/adriein/soma/app/pkg/vendor"
@@ -12,7 +13,7 @@ import (
 
 type CustomerService interface {
 	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
-	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier int) error
+	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier string) error
 }
 
 type Service struct {
@@ -115,17 +116,23 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	return nil
 }
 
-func (s *Service) ExchangeToken(ctx context.Context, chatID int64, tokenVerifier int) error {
+func (s *Service) ExchangeToken(ctx context.Context, chatID int64, tokenVerifier string) error {
 	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
 
 	if err != nil {
 		return eris.Wrap(err, "Error fetching the customer")
 	}
 
+	verifier, err := strconv.Atoi(tokenVerifier)
+
+	if err != nil {
+		return eris.Wrap(err, "Error converting verifier into an int")
+	}
+
 	payload := &vendor.OAuth{
 		OAuthToken:       customer.Token,
 		OAuthTokenSecret: customer.TokenSecret,
-		OauthVerifyCode:  customer.TokenVerifier,
+		OauthVerifyCode:  verifier,
 	}
 
 	oauth, err := s.nutritionDiaryAPI.VerifyToken(payload)
@@ -135,7 +142,7 @@ func (s *Service) ExchangeToken(ctx context.Context, chatID int64, tokenVerifier
 	}
 
 	customer.Token = oauth.OAuthToken
-	customer.TokenVerifier = tokenVerifier
+	customer.TokenVerifier = verifier
 
 	if err := s.repo.Save(ctx, customer); err != nil {
 		return eris.Wrap(err, "Error updating the customer")
