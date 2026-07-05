@@ -53,9 +53,17 @@ func (w *Worker) Dispatch(ctx context.Context, ch <-chan vendor.TelegramUpdate) 
 
 func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate) {
 	w.logger.Info("Dispatched update")
+	w.logger.Debug(fmt.Sprintf("Dispatched update: %+v\n", update))
+
 	switch update.Message.Text {
 	case "/start":
 		err := w.handleAuth(ctx, update)
+
+		if err != nil {
+			w.logger.Error(eris.ToString(err, true))
+		}
+	case "/assessment":
+		err := w.handleAssessment(ctx)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
@@ -66,4 +74,8 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 
 func (w *Worker) handleAuth(ctx context.Context, update vendor.TelegramUpdate) error {
 	return w.customerServ.ConnectNutritionApp(ctx, update.Message.Chat.ID, update.Message.From.FirstName)
+}
+
+func (w *Worker) handleAssessment(ctx context.Context) error {
+	return nil
 }
