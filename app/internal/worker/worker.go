@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/adriein/soma/app/internal/coach"
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
@@ -13,18 +14,26 @@ import (
 
 type Worker struct {
 	logger       *slog.Logger
-	customerServ customer.CustomerService
 	telegram     vendor.Bot
 	ch           chan vendor.TelegramUpdate
+	customerServ customer.CustomerService
+	coachServ    coach.CoachService
 }
 
-func New(customerServ customer.CustomerService, logger *slog.Logger, telegram vendor.Bot) *Worker {
+func New(
+	customerServ customer.CustomerService,
+	coachServ coach.CoachService,
+	logger *slog.Logger,
+	telegram vendor.Bot,
+) *Worker {
+
 	ch := make(chan vendor.TelegramUpdate, 20)
 
 	return &Worker{
 		logger:       logger,
 		telegram:     telegram,
 		customerServ: customerServ,
+		coachServ:    coachServ,
 		ch:           ch,
 	}
 }
@@ -80,7 +89,7 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 			w.logger.Error(eris.ToString(err, true))
 		}
 	case "/assessment":
-		err := w.handleAssessment(ctx)
+		err := w.handleAssessment(ctx, update)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
@@ -100,6 +109,8 @@ func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.Telegram
 	return w.customerServ.ExchangeToken(ctx, update.Message.Chat.ID, verificator)
 }
 
-func (w *Worker) handleAssessment(ctx context.Context) error {
+func (w *Worker) handleAssessment(ctx context.Context, update vendor.TelegramUpdate) error {
+	w.coachServ.Assessment(ctx, update.Message.Chat.ID)
+
 	return nil
 }

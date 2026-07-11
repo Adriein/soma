@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/adriein/soma/app/database"
+	"github.com/adriein/soma/app/internal/coach"
 	"github.com/adriein/soma/app/internal/customer"
+	"github.com/adriein/soma/app/internal/meal"
 	"github.com/adriein/soma/app/internal/worker"
 	"github.com/adriein/soma/app/pkg/constants"
 	"github.com/adriein/soma/app/pkg/helper"
@@ -89,11 +91,16 @@ func initLogger() *slog.Logger {
 func initModules(db *sql.DB, logger *slog.Logger) *Modules {
 	telegram := vendor.NewTelegramBot()
 	fsApi := vendor.NewFatSecret()
+	aiAPI := vendor.NewGemini()
 
 	customerRepo := customer.NewPgCustomerRepository(db)
 	customerServ := customer.NewService(fsApi, telegram, customerRepo)
 
-	worker := worker.New(customerServ, logger, telegram)
+	mealServ := meal.NewService(fsApi, customerServ)
+
+	coachServ := coach.NewService(mealServ, aiAPI)
+
+	worker := worker.New(customerServ, coachServ, logger, telegram)
 
 	return &Modules{
 		Customer: customerServ,

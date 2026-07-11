@@ -35,6 +35,7 @@ type NutritionDiary interface {
 	GetToken() (*OAuth, error)
 	AuthorizeToken(oauth *OAuth) (*string, error)
 	VerifyToken(oauth *OAuth) (*OAuth, error)
+	GetDiaryEntries(oauth *OAuth) error
 }
 
 type OAuth struct {
@@ -199,6 +200,26 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 		OAuthTokenSecret: oauthTokenSecret,
 		OauthVerifyCode:  oauth.OauthVerifyCode,
 	}, nil
+}
+
+func (fs *FatSecret) GetDiaryEntries(oauth *OAuth) error {
+	params := map[string]string{}
+
+	body, err := fs.makeRequestAuth(http.MethodGet, "https://platform.fatsecret.com/rest/food-entries/v2", params, oauth.OAuthTokenSecret)
+
+	if err != nil {
+		return err
+	}
+
+	values, err := url.ParseQuery(string(body))
+
+	if err != nil {
+		return eris.Wrap(err, "Failed to parse query string")
+	}
+
+	fmt.Printf("%v", values)
+
+	return nil
 }
 
 func (fs *FatSecret) generateNonce() string {

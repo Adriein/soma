@@ -12,6 +12,7 @@ import (
 )
 
 type CustomerService interface {
+	GetCustomer(ctx context.Context, chatID int64) (*Customer, error)
 	ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error
 	ExchangeToken(ctx context.Context, chatID int64, tokenVerifier string) error
 }
@@ -28,6 +29,16 @@ func NewService(nutritionDiaryAPI vendor.NutritionDiary, bot vendor.Bot, repo Cu
 		bot:               bot,
 		repo:              repo,
 	}
+}
+
+func (s *Service) GetCustomer(ctx context.Context, chatID int64) (*Customer, error) {
+	customer, err := s.repo.GetByTelegramChatID(ctx, chatID)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error fetching customer")
+	}
+
+	return customer, nil
 }
 
 func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, customerName string) error {

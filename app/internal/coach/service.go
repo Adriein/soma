@@ -1,6 +1,7 @@
 package coach
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/adriein/soma/app/internal/meal"
@@ -9,7 +10,7 @@ import (
 )
 
 type CoachService interface {
-	Assessment() *ActionPlan
+	Assessment(ctx context.Context, chatID int64) (*ActionPlan, error)
 }
 
 type Service struct {
@@ -24,8 +25,8 @@ func NewService(mealServ meal.MealService, aiServ vendor.AI) *Service {
 	}
 }
 
-func (s *Service) Assessment() (*ActionPlan, error) {
-	meals, err := s.mealServ.Get()
+func (s *Service) Assessment(ctx context.Context, chatID int64) (*ActionPlan, error) {
+	meals, err := s.mealServ.Get(ctx, chatID)
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Assessment error getting meals")
