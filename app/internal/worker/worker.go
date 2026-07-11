@@ -12,6 +12,12 @@ import (
 	"github.com/rotisserie/eris"
 )
 
+const (
+	StartWorkerCommand      = "/start"
+	AuthWorkerCommand       = "/auth"
+	AssessmentWorkerCommand = "/assessment"
+)
+
 type Worker struct {
 	logger       *slog.Logger
 	telegram     vendor.Bot
@@ -76,19 +82,19 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 	command := args[0]
 
 	switch command {
-	case "/start":
+	case StartWorkerCommand:
 		err := w.handleConnect(ctx, update)
 
 		if err != nil {
 			w.logger.Error("Failed connection", "error_details", eris.ToJSON(err, true))
 		}
-	case "/auth":
+	case AuthWorkerCommand:
 		err := w.handleExchangeToken(ctx, update, args)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
 		}
-	case "/assessment":
+	case AssessmentWorkerCommand:
 		err := w.handleAssessment(ctx, update)
 
 		if err != nil {
@@ -110,7 +116,5 @@ func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.Telegram
 }
 
 func (w *Worker) handleAssessment(ctx context.Context, update vendor.TelegramUpdate) error {
-	w.coachServ.Assessment(ctx, update.Message.Chat.ID)
-
-	return nil
+	return w.coachServ.Assessment(ctx, update.Message.Chat.ID)
 }
