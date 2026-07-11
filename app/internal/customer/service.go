@@ -153,6 +153,7 @@ func (s *Service) ExchangeToken(ctx context.Context, chatID int64, tokenVerifier
 	}
 
 	customer.Token = oauth.OAuthToken
+	customer.TokenSecret = oauth.OAuthTokenSecret
 	customer.TokenVerifier = verifier
 
 	if err := s.repo.Save(ctx, customer); err != nil {

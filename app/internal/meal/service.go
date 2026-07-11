@@ -2,6 +2,7 @@ package meal
 
 import (
 	"context"
+	"time"
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
@@ -40,7 +41,17 @@ func (s *Service) Get(ctx context.Context, chatID int64) ([]*Meal, error) {
 		OauthVerifyCode:  customer.TokenVerifier,
 	}
 
-	s.nutritionAPI.GetDiaryEntries(oauth)
+	location, err := time.LoadLocation("Europe/Madrid")
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error loading location")
+	}
+
+	nowInMadrid := time.Now().In(location)
+
+	from := nowInMadrid.AddDate(0, 0, -5)
+
+	s.nutritionAPI.GetDiaryEntries(oauth, from)
 
 	return nil, nil
 }

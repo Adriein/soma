@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -35,7 +36,7 @@ type NutritionDiary interface {
 	GetToken() (*OAuth, error)
 	AuthorizeToken(oauth *OAuth) (*string, error)
 	VerifyToken(oauth *OAuth) (*OAuth, error)
-	GetDiaryEntries(oauth *OAuth) error
+	GetDiaryEntries(oauth *OAuth, from time.Time) (*FsDiaryEntry, error)
 }
 
 type OAuth struct {
@@ -45,7 +46,7 @@ type OAuth struct {
 }
 
 type DiaryMeal struct {
-	ID                 int    `json:"food_entry_id"`
+	ID                 string `json:"food_entry_id"`
 	Calcium            string `json:"calcium"`
 	Calories           string `json:"calories"`
 	Carbohydrate       string `json:"carbohydrate"`
@@ -71,7 +72,7 @@ type DiaryMeal struct {
 	VitaminC           string `json:"vitamin_c"`
 }
 
-type FSDiaryEntry struct {
+type FsDiaryEntry struct {
 	Entries struct {
 		Meals []DiaryMeal `json:"food_entry"`
 	} `json:"food_entries"`
@@ -202,24 +203,32 @@ func (fs *FatSecret) VerifyToken(oauth *OAuth) (*OAuth, error) {
 	}, nil
 }
 
-func (fs *FatSecret) GetDiaryEntries(oauth *OAuth) error {
-	params := map[string]string{}
+func (fs *FatSecret) GetDiaryEntries(oauth *OAuth, from time.Time) (*FsDiaryEntry, error) {
+	unixTimestamp := from.Unix()
+
+	const secondsInDay = 24 * 60 * 60
+	daysSince1970 := unixTimestamp / secondsInDay
+
+	params := map[string]string{
+		"oauth_token": oauth.OAuthToken,
+		"date":        strconv.FormatInt(daysSince1970, 10),
+		"format":      "json",
+	}
 
 	body, err := fs.makeRequestAuth(http.MethodGet, "https://platform.fatsecret.com/rest/food-entries/v2", params, oauth.OAuthTokenSecret)
 
 	if err != nil {
-		return err
+		return nil, eris.Wrap(err, "Error makeing the request")
 	}
 
-	values, err := url.ParseQuery(string(body))
+	var diaryEntry FsDiaryEntry
+	err = json.Unmarshal(body, &diaryEntry)
 
 	if err != nil {
-		return eris.Wrap(err, "Failed to parse query string")
+		return nil, eris.Wrap(err, "Failed to parse response body into JSON")
 	}
 
-	fmt.Printf("%v", values)
-
-	return nil
+	return &diaryEntry, nil
 }
 
 func (fs *FatSecret) generateNonce() string {
@@ -281,6 +290,8 @@ func (fs *FatSecret) buildRequest(method string, requestURL string, form url.Val
 	}
 
 	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(form.Encode()))
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Failed to create HTTP request")
