@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
 
 type MealService interface {
-	Get(ctx context.Context, oauth *vendor.OAuth, days int) ([]*Meal, error)
+	Get(ctx context.Context, customer *customer.Customer, days int) ([]*Meal, error)
 }
 
 type Service struct {
@@ -24,7 +25,7 @@ func NewService(
 	}
 }
 
-func (s *Service) Get(ctx context.Context, oauth *vendor.OAuth, days int) ([]*Meal, error) {
+func (s *Service) Get(ctx context.Context, customer *customer.Customer, days int) ([]*Meal, error) {
 	location, err := time.LoadLocation("Europe/Madrid")
 
 	if err != nil {
@@ -35,7 +36,23 @@ func (s *Service) Get(ctx context.Context, oauth *vendor.OAuth, days int) ([]*Me
 
 	from := nowInMadrid.AddDate(0, 0, -days)
 
-	s.nutritionAPI.GetDiaryEntries(oauth, from)
+	oauth := &vendor.OAuth{
+		OAuthToken:       customer.Token,
+		OAuthTokenSecret: customer.TokenSecret,
+		OauthVerifyCode:  customer.TokenVerifier,
+	}
 
-	return nil, nil
+	result, err := s.nutritionAPI.GetDiaryEntries(oauth, from)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error fetching meals")
+	}
+
+	meals := make([]*Meal, len(result.Entries.Meals))
+
+	for idx, fsMeal := range result.Entries.Meals {
+		meals[idx] = ToDomain(&fsMeal)
+	}
+
+	return meals, nil
 }

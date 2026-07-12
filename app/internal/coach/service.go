@@ -60,21 +60,15 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	data.Profile = customer
 
-	oauth := &vendor.OAuth{
-		OAuthToken:       customer.Token,
-		OAuthTokenSecret: customer.TokenSecret,
-		OauthVerifyCode:  customer.TokenVerifier,
-	}
-
 	for day := daysElapsed; day >= 0; day-- {
-		meals, err := s.mealServ.Get(ctx, oauth, day)
+		meals, err := s.mealServ.Get(ctx, data.Profile, day)
 
 		if err != nil {
 			return eris.Wrapf(err, "Error fetching meals in day: %d", day)
 		}
 
 		entry := &DiaryEntry{
-			Date:  time.Now(),
+			Date:  now.AddDate(0, 0, -day),
 			Meals: meals,
 		}
 
