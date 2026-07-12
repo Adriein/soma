@@ -20,4 +20,5 @@ type DiaryEntry struct {
 type AssessmentData struct {
 	Profile *customer.Customer
 	Diet    []*DiaryEntry
+	Sources string
 }

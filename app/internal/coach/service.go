@@ -1,15 +1,20 @@
 package coach
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"text/template"
 	"time"
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/internal/meal"
+	"github.com/adriein/soma/app/pkg/prompts"
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
+
+const CoachTmpl = "coach"
 
 type CoachService interface {
 	Assessment(ctx context.Context, chatID int64) error
@@ -75,7 +80,23 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		data.Diet = append(data.Diet, entry)
 	}
 
-	aiAssessment, err := s.aiServ.Ask("")
+	tmpl, err := template.New(CoachTmpl).Parse(prompts.NutritionCoachPromptTmpl)
+
+	if err != nil {
+		return eris.Wrap(err, "Error loading the prompt.tmpl file")
+	}
+
+	var tmplBuff bytes.Buffer
+
+	err = tmpl.Execute(&tmplBuff, data)
+
+	if err != nil {
+		return eris.Wrap(err, "Error parsing prompt.tmpl file")
+	}
+
+	prompt := tmplBuff.String()
+
+	aiAssessment, err := s.aiServ.Ask(prompt)
 
 	if err != nil {
 		return eris.Wrap(err, "Assesment error calling AI")
