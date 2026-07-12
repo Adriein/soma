@@ -9,6 +9,7 @@ import (
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/internal/meal"
+	"github.com/adriein/soma/app/pkg/helper"
 	"github.com/adriein/soma/app/pkg/prompts"
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
@@ -24,17 +25,20 @@ type Service struct {
 	customerServ customer.CustomerService
 	mealServ     meal.MealService
 	aiServ       vendor.AI
+	bot          vendor.Bot
 }
 
 func NewService(
 	customerServ customer.CustomerService,
 	mealServ meal.MealService,
 	aiServ vendor.AI,
+	bot vendor.Bot,
 ) *Service {
 	return &Service{
 		customerServ: customerServ,
 		mealServ:     mealServ,
 		aiServ:       aiServ,
+		bot:          bot,
 	}
 }
 
@@ -96,13 +100,25 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	prompt := tmplBuff.String()
 
-	aiAssessment, err := s.aiServ.Ask(prompt)
+	aiRes, err := s.aiServ.Ask(prompt)
 
 	if err != nil {
 		return eris.Wrap(err, "Assesment error calling AI")
 	}
 
-	fmt.Print(aiAssessment)
+	fmt.Print(aiRes.Text())
+
+	text := helper.EscapeText(aiRes.Text())
+
+	message := vendor.OutgoingMessage{
+		ChatID:    data.Profile.TelegramChatID,
+		Text:      text,
+		ParseMode: "MarkdownV2",
+	}
+
+	if err := s.bot.SendMessage(ctx, message); err != nil {
+		return err
+	}
 
 	return nil
 }

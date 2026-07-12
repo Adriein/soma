@@ -34,6 +34,10 @@ type AIRes struct {
 	Candidates []Candidate `json:"candidates"`
 }
 
+func (r *AIRes) Text() string {
+	return r.Candidates[0].Content.Parts[0].Text
+}
+
 type AI interface {
 	Ask(question string) (*AIRes, error)
 }

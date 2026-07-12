@@ -98,7 +98,7 @@ func initModules(db *sql.DB, logger *slog.Logger) *Modules {
 
 	mealServ := meal.NewService(fsApi)
 
-	coachServ := coach.NewService(customerServ, mealServ, aiAPI)
+	coachServ := coach.NewService(customerServ, mealServ, aiAPI, telegram)
 
 	worker := worker.New(customerServ, coachServ, logger, telegram)
 
