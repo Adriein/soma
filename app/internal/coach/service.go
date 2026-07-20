@@ -15,7 +15,10 @@ import (
 	"github.com/rotisserie/eris"
 )
 
-const CoachTmpl = "coach"
+const (
+	CoachTmpl                    = "coach"
+	AssessmentChunkMaxCharLength = 2000
+)
 
 type CoachService interface {
 	Assessment(ctx context.Context, chatID int64) error
@@ -109,6 +112,24 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	fmt.Print(aiRes.Text())
 
 	text := helper.EscapeText(aiRes.Text())
+
+	if len(text) >= vendor.TelegramMaxMessageCharLength {
+		messageChunks := helper.SplitMessage(text, AssessmentChunkMaxCharLength)
+
+		for _, chunk := range messageChunks {
+			message := vendor.OutgoingMessage{
+				ChatID:    data.Profile.TelegramChatID,
+				Text:      chunk,
+				ParseMode: vendor.TelegramMarkdownV2,
+			}
+
+			if err := s.bot.SendMessage(ctx, message); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,

@@ -19,6 +19,7 @@ const (
 	TelegramApiGetUpdatesMethod  = "getUpdates"
 	TelegramApiSendMessageMethod = "sendMessage"
 	TelegramMarkdownV2           = "MarkdownV2"
+	TelegramMaxMessageCharLength = 4000
 )
 
 type TelegramUser struct {
