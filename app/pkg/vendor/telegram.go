@@ -18,6 +18,7 @@ const (
 	TelegramApiURL               = "https://api.telegram.org"
 	TelegramApiGetUpdatesMethod  = "getUpdates"
 	TelegramApiSendMessageMethod = "sendMessage"
+	TelegramMarkdownV2           = "MarkdownV2"
 )
 
 type TelegramUser struct {
@@ -65,9 +66,9 @@ type InlineKeyboardButton struct {
 }
 
 type OutgoingMessage struct {
-	ChatID      int64                `json:"chat_id"`
-	Text        string               `json:"text"`
-	ParseMode   string               `json:"parse_mode"`
+	ChatID      int64                 `json:"chat_id"`
+	Text        string                `json:"text"`
+	ParseMode   string                `json:"parse_mode"`
 	ReplyMarkup *InlineKeyboardMarkup `json:"reply_markup,omitempty"`
 }
 

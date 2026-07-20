@@ -56,7 +56,7 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 		payload := vendor.OutgoingMessage{
 			ChatID:    chatID,
 			Text:      markdown.String(),
-			ParseMode: "MarkdownV2",
+			ParseMode: vendor.TelegramMarkdownV2,
 		}
 
 		if err := s.bot.SendMessage(ctx, payload); err != nil {
@@ -106,7 +106,7 @@ func (s *Service) ConnectNutritionApp(ctx context.Context, chatID int64, custome
 	payload := vendor.OutgoingMessage{
 		ChatID:    chatID,
 		Text:      markdown.String(),
-		ParseMode: "MarkdownV2",
+		ParseMode: vendor.TelegramMarkdownV2,
 		ReplyMarkup: &vendor.InlineKeyboardMarkup{
 			InlineKeyboard: [][]vendor.InlineKeyboardButton{
 				{

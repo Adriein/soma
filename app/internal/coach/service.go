@@ -113,7 +113,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
 		Text:      text,
-		ParseMode: "MarkdownV2",
+		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
 	if err := s.bot.SendMessage(ctx, message); err != nil {
