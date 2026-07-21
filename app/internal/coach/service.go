@@ -3,6 +3,7 @@ package coach
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"text/template"
 	"time"
@@ -129,6 +130,17 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	aiRes, err := s.aiServ.Ask(prompt)
 
 	if err != nil {
+		if errors.Is(err, vendor.ErrAISpikeDemand) {
+			feedback = vendor.OutgoingMessage{
+				ChatID: data.Profile.TelegramChatID,
+				Text:   "🤡 IA saturada, porfavor intentelo luego",
+			}
+
+			if err := s.bot.SendMessage(ctx, feedback); err != nil {
+				return eris.Wrap(err, "Error sending feedback message")
+			}
+		}
+
 		return eris.Wrap(err, "Assesment error calling AI")
 	}
 

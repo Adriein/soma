@@ -14,6 +14,8 @@ import (
 
 const GemniniURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
 
+var ErrAISpikeDemand = eris.New("Model currently experiencing high demand")
+
 type Part struct {
 	Text string `json:"text"`
 }
@@ -93,6 +95,10 @@ func (g *Gemini) Ask(question string) (*AIRes, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return nil, ErrAISpikeDemand
+		}
+
 		return nil, eris.New(fmt.Sprintf("Gemini response error, %s with http code %d", string(resBody), resp.StatusCode))
 	}
 
