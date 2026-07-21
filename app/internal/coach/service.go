@@ -53,21 +53,6 @@ func NewService(
 func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	//TODO: the main idea is to get everything the first time and store the evaluation in the db with the date then the next times i only take from the last evaluation to today
 	//TODO: añadir el analisis por semana en lugar de un todo
-	loc, err := time.LoadLocation(constants.TimeLocationMadrid)
-
-	if err != nil {
-		return eris.Wrap(err, "Error loading location")
-	}
-
-	now := time.Now().In(loc)
-
-	//The fist date I've added meals is 2026-06-25
-	targetDate := time.Date(2026, time.June, 25, 0, 0, 0, 0, loc)
-
-	dur := now.Sub(targetDate)
-
-	daysElapsed := int(dur.Hours() / 24)
-
 	var data AssessmentData
 
 	customer, err := s.customerServ.GetCustomer(ctx, chatID)
@@ -78,76 +63,22 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	data.Profile = customer
 
-	feedback := vendor.OutgoingMessage{
-		ChatID: data.Profile.TelegramChatID,
-		Text:   "🍉 Recopilando datos de todas las comidas...",
-	}
-
-	if err := s.bot.SendMessage(ctx, feedback); err != nil {
-		return eris.Wrap(err, "Error sending feedback message")
-	}
-
-	for day := daysElapsed; day >= 0; day-- {
-		meals, err := s.mealServ.Get(ctx, data.Profile, day)
-
-		if err != nil {
-			return eris.Wrapf(err, "Error fetching meals in day: %d", day)
-		}
-
-		entry := &DiaryEntry{
-			Date:  now.AddDate(0, 0, -day),
-			Meals: meals,
-		}
-
-		data.Diet = append(data.Diet, entry)
-	}
-
-	tmpl, err := template.New(CoachTmpl).Parse(prompts.NutritionCoachPromptTmpl)
+	meals, err := s.collectMeals(ctx, &data)
 
 	if err != nil {
-		return eris.Wrap(err, "Error loading the prompt.tmpl file")
+		return err
 	}
 
-	var tmplBuff bytes.Buffer
+	data.Diet = meals
 
-	err = tmpl.Execute(&tmplBuff, data)
+	assessment, err := s.aiAssessment(ctx, &data)
 
 	if err != nil {
-		return eris.Wrap(err, "Error parsing prompt.tmpl file")
+		return err
 	}
 
-	prompt := tmplBuff.String()
-
-	feedback = vendor.OutgoingMessage{
-		ChatID: data.Profile.TelegramChatID,
-		Text:   "🤖 Preguntando a los expertos de silicio...",
-	}
-
-	if err := s.bot.SendMessage(ctx, feedback); err != nil {
-		return eris.Wrap(err, "Error sending feedback message")
-	}
-
-	aiRes, err := s.aiServ.Ask(prompt)
-
-	if err != nil {
-		if errors.Is(err, vendor.ErrAISpikeDemand) {
-			feedback = vendor.OutgoingMessage{
-				ChatID: data.Profile.TelegramChatID,
-				Text:   "🤡 IA saturada, porfavor intentelo luego",
-			}
-
-			if err := s.bot.SendMessage(ctx, feedback); err != nil {
-				return eris.Wrap(err, "Error sending feedback message")
-			}
-		}
-
-		return eris.Wrap(err, "Assesment error calling AI")
-	}
-
-	text := helper.EscapeText(aiRes.Text())
-
-	if len(text) >= vendor.TelegramMaxMessageCharLength {
-		messageChunks := helper.SplitMessage(text, AssessmentChunkMaxCharLength)
+	if len(assessment) >= vendor.TelegramMaxMessageCharLength {
+		messageChunks := helper.SplitMessage(assessment, AssessmentChunkMaxCharLength)
 
 		for _, chunk := range messageChunks {
 			message := vendor.OutgoingMessage{
@@ -166,7 +97,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
-		Text:      text,
+		Text:      assessment,
 		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
@@ -175,4 +106,95 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	}
 
 	return nil
+}
+
+func (s *Service) collectMeals(ctx context.Context, data *AssessmentData) ([]*DiaryEntry, error) {
+	feedback := vendor.OutgoingMessage{
+		ChatID: data.Profile.TelegramChatID,
+		Text:   "🍉 Recopilando datos de todas las comidas...",
+	}
+
+	if err := s.bot.SendMessage(ctx, feedback); err != nil {
+		return nil, eris.Wrap(err, "Error sending feedback message")
+	}
+
+	loc, err := time.LoadLocation(constants.TimeLocationMadrid)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "Error loading location")
+	}
+
+	now := time.Now().In(loc)
+
+	//The fist date I've added meals is 2026-06-25
+	targetDate := time.Date(2026, time.June, 25, 0, 0, 0, 0, loc)
+
+	dur := now.Sub(targetDate)
+
+	daysElapsed := int(dur.Hours() / 24)
+
+	var results []*DiaryEntry
+
+	for day := daysElapsed; day >= 0; day-- {
+		meals, err := s.mealServ.Get(ctx, data.Profile, day)
+
+		if err != nil {
+			return nil, eris.Wrapf(err, "Error fetching meals in day: %d", day)
+		}
+
+		entry := &DiaryEntry{
+			Date:  now.AddDate(0, 0, -day),
+			Meals: meals,
+		}
+
+		results = append(results, entry)
+	}
+
+	return results, nil
+}
+
+func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (string, error) {
+	tmpl, err := template.New(CoachTmpl).Parse(prompts.NutritionCoachPromptTmpl)
+
+	if err != nil {
+		return "", eris.Wrap(err, "Error loading the prompt.tmpl file")
+	}
+
+	var tmplBuff bytes.Buffer
+
+	err = tmpl.Execute(&tmplBuff, data)
+
+	if err != nil {
+		return "", eris.Wrap(err, "Error parsing prompt.tmpl file")
+	}
+
+	prompt := tmplBuff.String()
+
+	feedback := vendor.OutgoingMessage{
+		ChatID: data.Profile.TelegramChatID,
+		Text:   "🤖 Preguntando a los expertos de silicio...",
+	}
+
+	if err := s.bot.SendMessage(ctx, feedback); err != nil {
+		return "", eris.Wrap(err, "Error sending feedback message")
+	}
+
+	aiRes, err := s.aiServ.Ask(prompt)
+
+	if err != nil {
+		if errors.Is(err, vendor.ErrAISpikeDemand) {
+			feedback = vendor.OutgoingMessage{
+				ChatID: data.Profile.TelegramChatID,
+				Text:   "🤡 IA saturada, porfavor intentelo luego",
+			}
+
+			if err := s.bot.SendMessage(ctx, feedback); err != nil {
+				return "", eris.Wrap(err, "Error sending feedback message")
+			}
+		}
+
+		return "", eris.Wrap(err, "Assesment error calling AI")
+	}
+
+	return helper.EscapeText(aiRes.Text()), nil
 }
