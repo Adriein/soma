@@ -7,9 +7,10 @@ import (
 	"github.com/adriein/soma/app/internal/meal"
 )
 
-type ActionPlan struct {
+type Assessment struct {
 	ID      int
 	Content string
+	DateAdd time.Time
 }
 
 type DiaryEntry struct {

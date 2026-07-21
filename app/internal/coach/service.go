@@ -27,26 +27,29 @@ type CoachService interface {
 }
 
 type Service struct {
-	customerServ customer.CustomerService
-	mealServ     meal.MealService
-	aiServ       vendor.AI
-	bot          vendor.Bot
-	logger       *slog.Logger
+	customerServ   customer.CustomerService
+	mealServ       meal.MealService
+	aiServ         vendor.AI
+	assessmentRepo AssessmentRepository
+	bot            vendor.Bot
+	logger         *slog.Logger
 }
 
 func NewService(
 	customerServ customer.CustomerService,
 	mealServ meal.MealService,
 	aiServ vendor.AI,
+	assessmentRepo AssessmentRepository,
 	bot vendor.Bot,
 	logger *slog.Logger,
 ) *Service {
 	return &Service{
-		customerServ: customerServ,
-		mealServ:     mealServ,
-		aiServ:       aiServ,
-		bot:          bot,
-		logger:       logger,
+		customerServ:   customerServ,
+		mealServ:       mealServ,
+		aiServ:         aiServ,
+		assessmentRepo: assessmentRepo,
+		bot:            bot,
+		logger:         logger,
 	}
 }
 
@@ -77,10 +80,14 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		return err
 	}
 
-	s.logger.Debug(assessment)
+	s.logger.Debug(assessment.Content)
 
-	if len(assessment) >= vendor.TelegramMaxMessageCharLength {
-		messageChunks := helper.SplitMessage(assessment, AssessmentChunkMaxCharLength)
+	if err := s.assessmentRepo.Save(ctx, assessment); err != nil {
+		return eris.Wrap(err, "Error saving the ai generated assessment")
+	}
+
+	if len(assessment.Content) >= vendor.TelegramMaxMessageCharLength {
+		messageChunks := helper.SplitMessage(assessment.Content, AssessmentChunkMaxCharLength)
 
 		for _, chunk := range messageChunks {
 			message := vendor.OutgoingMessage{
@@ -99,7 +106,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
-		Text:      assessment,
+		Text:      assessment.Content,
 		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
@@ -155,11 +162,11 @@ func (s *Service) collectMeals(ctx context.Context, data *AssessmentData) ([]*Di
 	return results, nil
 }
 
-func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (string, error) {
+func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (*Assessment, error) {
 	tmpl, err := template.New(CoachTmpl).Parse(prompts.NutritionCoachPromptTmpl)
 
 	if err != nil {
-		return "", eris.Wrap(err, "Error loading the prompt.tmpl file")
+		return nil, eris.Wrap(err, "Error loading the prompt.tmpl file")
 	}
 
 	var tmplBuff bytes.Buffer
@@ -167,7 +174,7 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (strin
 	err = tmpl.Execute(&tmplBuff, data)
 
 	if err != nil {
-		return "", eris.Wrap(err, "Error parsing prompt.tmpl file")
+		return nil, eris.Wrap(err, "Error parsing prompt.tmpl file")
 	}
 
 	prompt := tmplBuff.String()
@@ -178,7 +185,7 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (strin
 	}
 
 	if err := s.bot.SendMessage(ctx, feedback); err != nil {
-		return "", eris.Wrap(err, "Error sending feedback message")
+		return nil, eris.Wrap(err, "Error sending feedback message")
 	}
 
 	aiRes, err := s.aiServ.Ask(prompt)
@@ -191,12 +198,14 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (strin
 			}
 
 			if err := s.bot.SendMessage(ctx, feedback); err != nil {
-				return "", eris.Wrap(err, "Error sending feedback message")
+				return nil, eris.Wrap(err, "Error sending feedback message")
 			}
 		}
 
-		return "", eris.Wrap(err, "Assesment error calling AI")
+		return nil, eris.Wrap(err, "Assesment error calling AI")
 	}
 
-	return helper.EscapeText(aiRes.Text()), nil
+	//return helper.EscapeText(aiRes.Text()), nil
+
+	return &Assessment{Content: aiRes.Text()}, nil
 }
