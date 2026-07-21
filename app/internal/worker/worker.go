@@ -68,8 +68,7 @@ func (w *Worker) Dispatch(ctx context.Context, ch <-chan vendor.TelegramUpdate) 
 }
 
 func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate) {
-	w.logger.Info("Dispatched update")
-	w.logger.Debug(fmt.Sprintf("Dispatched update: %+v\n", update))
+	w.logger.Debug(fmt.Sprintf("Dispatched update: %+v", update))
 
 	args := strings.Fields(update.Message.Text)
 

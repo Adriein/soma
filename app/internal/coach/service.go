@@ -3,6 +3,7 @@ package coach
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"text/template"
 	"time"
 
@@ -29,6 +30,7 @@ type Service struct {
 	mealServ     meal.MealService
 	aiServ       vendor.AI
 	bot          vendor.Bot
+	logger       *slog.Logger
 }
 
 func NewService(
@@ -36,18 +38,20 @@ func NewService(
 	mealServ meal.MealService,
 	aiServ vendor.AI,
 	bot vendor.Bot,
+	logger *slog.Logger,
 ) *Service {
 	return &Service{
 		customerServ: customerServ,
 		mealServ:     mealServ,
 		aiServ:       aiServ,
 		bot:          bot,
+		logger:       logger,
 	}
 }
 
 func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	//TODO: the main idea is to get everything the first time and store the evaluation in the db with the date then the next times i only take from the last evaluation to today
-	//TODO: añadir logs + hacer mas bonito el mensaje de output + añadir el analisis por semana en lugar de un todo
+	//TODO: añadir el analisis por semana en lugar de un todo
 	loc, err := time.LoadLocation(constants.TimeLocationMadrid)
 
 	if err != nil {
@@ -155,7 +159,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	}
 
 	if err := s.bot.SendMessage(ctx, message); err != nil {
-		return err
+		return eris.Wrap(err, "Error sending the coach assessment")
 	}
 
 	return nil
