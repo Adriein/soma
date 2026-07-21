@@ -77,6 +77,8 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		return err
 	}
 
+	s.logger.Debug(assessment)
+
 	if len(assessment) >= vendor.TelegramMaxMessageCharLength {
 		messageChunks := helper.SplitMessage(assessment, AssessmentChunkMaxCharLength)
 
