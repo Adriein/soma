@@ -30,7 +30,9 @@ type App struct {
 }
 
 func NewApp() *App {
-	if os.Getenv(constants.Env) != constants.Prod {
+	env := os.Getenv(constants.Env)
+
+	if env != constants.Prod {
 		dotenvErr := godotenv.Load()
 
 		if dotenvErr != nil {
@@ -55,7 +57,7 @@ func NewApp() *App {
 		log.Fatal(envCheckerErr.Error())
 	}
 
-	logger := initLogger()
+	logger := initLogger(env)
 
 	db := database.New()
 	modules := initModules(db, logger)
@@ -67,8 +69,15 @@ func NewApp() *App {
 	}
 }
 
-func initLogger() *slog.Logger {
+func initLogger(env string) *slog.Logger {
+	lvl := slog.LevelInfo
+
+	if env != constants.Prod {
+		lvl = slog.LevelDebug
+	}
+
 	opts := &slog.HandlerOptions{
+		Level: lvl,
 		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
 			if attr.Key == slog.TimeKey {
 				formatted := attr.Value.Time().UTC().Format(time.DateTime)
@@ -80,7 +89,7 @@ func initLogger() *slog.Logger {
 		},
 	}
 
-	if os.Getenv(constants.Env) == constants.Dev {
+	if env == constants.Dev {
 		return slog.New(slog.NewTextHandler(os.Stdout, opts))
 	}
 
