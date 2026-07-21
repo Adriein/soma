@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/adriein/soma/app/internal/customer"
+	"github.com/adriein/soma/app/pkg/constants"
 	"github.com/adriein/soma/app/pkg/vendor"
 	"github.com/rotisserie/eris"
 )
@@ -26,7 +27,7 @@ func NewService(
 }
 
 func (s *Service) Get(ctx context.Context, customer *customer.Customer, days int) ([]*Meal, error) {
-	location, err := time.LoadLocation("Europe/Madrid")
+	location, err := time.LoadLocation(constants.TimeLocationMadrid)
 
 	if err != nil {
 		return nil, eris.Wrap(err, "Error loading location")

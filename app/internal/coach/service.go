@@ -3,12 +3,12 @@ package coach
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"text/template"
 	"time"
 
 	"github.com/adriein/soma/app/internal/customer"
 	"github.com/adriein/soma/app/internal/meal"
+	"github.com/adriein/soma/app/pkg/constants"
 	"github.com/adriein/soma/app/pkg/helper"
 	"github.com/adriein/soma/app/pkg/prompts"
 	"github.com/adriein/soma/app/pkg/vendor"
@@ -47,7 +47,8 @@ func NewService(
 
 func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	//TODO: the main idea is to get everything the first time and store the evaluation in the db with the date then the next times i only take from the last evaluation to today
-	loc, err := time.LoadLocation("Europe/Madrid")
+	//TODO: añadir logs + hacer mas bonito el mensaje de output + añadir el analisis por semana en lugar de un todo
+	loc, err := time.LoadLocation(constants.TimeLocationMadrid)
 
 	if err != nil {
 		return eris.Wrap(err, "Error loading location")
@@ -71,6 +72,15 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	}
 
 	data.Profile = customer
+
+	feedback := vendor.OutgoingMessage{
+		ChatID: data.Profile.TelegramChatID,
+		Text:   "🍉 Recopilando datos de todas las comidas...",
+	}
+
+	if err := s.bot.SendMessage(ctx, feedback); err != nil {
+		return eris.Wrap(err, "Error sending feedback message")
+	}
 
 	for day := daysElapsed; day >= 0; day-- {
 		meals, err := s.mealServ.Get(ctx, data.Profile, day)
@@ -103,13 +113,20 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	prompt := tmplBuff.String()
 
+	feedback = vendor.OutgoingMessage{
+		ChatID: data.Profile.TelegramChatID,
+		Text:   "🤖 Preguntando a los expertos de silicio...",
+	}
+
+	if err := s.bot.SendMessage(ctx, feedback); err != nil {
+		return eris.Wrap(err, "Error sending feedback message")
+	}
+
 	aiRes, err := s.aiServ.Ask(prompt)
 
 	if err != nil {
 		return eris.Wrap(err, "Assesment error calling AI")
 	}
-
-	fmt.Print(aiRes.Text())
 
 	text := helper.EscapeText(aiRes.Text())
 

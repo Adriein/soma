@@ -16,8 +16,9 @@ const (
 )
 
 const (
-	Dev  = "dev"
-	Prod = "pro"
+	Dev                = "dev"
+	Prod               = "pro"
+	TimeLocationMadrid = "Europe/Madrid"
 )
 
 const (
