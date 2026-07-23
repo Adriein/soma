@@ -56,7 +56,6 @@ func NewService(
 }
 
 func (s *Service) Assessment(ctx context.Context, chatID int64) error {
-	//TODO: the main idea is to get everything the first time and store the evaluation in the db with the date then the next times i only take from the last evaluation to today
 	//TODO: añadir el analisis por semana en lugar de un todo
 	var data AssessmentData
 
@@ -80,7 +79,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	data.Diet = meals
 
-	//assessment, err := s.assessmentRepo.GetByID(ctx, 1)
+	//assessment, err := s.assessmentRepo.GetByID(ctx, 3)
 
 	assessment, err := s.aiAssessment(ctx, &data)
 
@@ -100,7 +99,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		for _, chunk := range messageChunks {
 			message := vendor.OutgoingMessage{
 				ChatID:    data.Profile.TelegramChatID,
-				Text:      helper.CustomXMLToMarkdownV2(chunk),
+				Text:      fmt.Sprintf("*SomaBot \\#%s*\n%s", sessionID, helper.CustomXMLToMarkdownV2(chunk)),
 				ParseMode: vendor.TelegramMarkdownV2,
 			}
 
@@ -118,7 +117,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
-		Text:      helper.CustomXMLToMarkdownV2(assessment.Content),
+		Text:      fmt.Sprintf("*SomaBot \\#%s*\n%s", sessionID, helper.CustomXMLToMarkdownV2(assessment.Content)),
 		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
