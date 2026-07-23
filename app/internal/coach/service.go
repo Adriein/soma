@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"text/template"
 	"time"
@@ -20,6 +21,7 @@ import (
 const (
 	CoachTmpl                    = "coach"
 	AssessmentChunkMaxCharLength = 2000
+	CtxSessionID                 = "SessionID"
 )
 
 type CoachService interface {
@@ -57,6 +59,10 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 	//TODO: the main idea is to get everything the first time and store the evaluation in the db with the date then the next times i only take from the last evaluation to today
 	//TODO: añadir el analisis por semana en lugar de un todo
 	var data AssessmentData
+
+	sessionID := helper.TinyUuid()
+
+	ctx = context.WithValue(ctx, CtxSessionID, sessionID)
 
 	customer, err := s.customerServ.GetCustomer(ctx, chatID)
 
@@ -129,8 +135,9 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 func (s *Service) collectMeals(ctx context.Context, data *AssessmentData) ([]*DiaryEntry, error) {
 	feedback := vendor.OutgoingMessage{
-		ChatID: data.Profile.TelegramChatID,
-		Text:   "🍉 Recopilando datos de todas las comidas...",
+		ChatID:    data.Profile.TelegramChatID,
+		Text:      fmt.Sprintf("*SomaBot \\#%s*\n🍉 Recopilando datos de todas las comidas\\.\\.\\.", ctx.Value(CtxSessionID)),
+		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
 	if err := s.bot.SendMessage(ctx, feedback); err != nil {
@@ -190,8 +197,9 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (*Asse
 	prompt := tmplBuff.String()
 
 	feedback := vendor.OutgoingMessage{
-		ChatID: data.Profile.TelegramChatID,
-		Text:   "🤖 Preguntando a los expertos de silicio...",
+		ChatID:    data.Profile.TelegramChatID,
+		Text:      fmt.Sprintf("*SomaBot \\#%s*\n🤖 Preguntando a los expertos de silicio\\.\\.\\.", ctx.Value(CtxSessionID)),
+		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
 	if err := s.bot.SendMessage(ctx, feedback); err != nil {
@@ -203,8 +211,9 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (*Asse
 	if err != nil {
 		if errors.Is(err, vendor.ErrAISpikeDemand) {
 			feedback = vendor.OutgoingMessage{
-				ChatID: data.Profile.TelegramChatID,
-				Text:   "🤡 IA saturada, porfavor intentelo luego",
+				ChatID:    data.Profile.TelegramChatID,
+				Text:      fmt.Sprintf("*SomaBot \\#%s*\n🤡 IA saturada, porfavor intentelo luego\\.", ctx.Value(CtxSessionID)),
+				ParseMode: vendor.TelegramMarkdownV2,
 			}
 
 			if err := s.bot.SendMessage(ctx, feedback); err != nil {
