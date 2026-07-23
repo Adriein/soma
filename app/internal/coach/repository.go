@@ -3,12 +3,16 @@ package coach
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/rotisserie/eris"
 )
 
+var ErrAssessmentNotFound = eris.New("Assessment not found")
+
 type AssessmentRepository interface {
 	Save(ctx context.Context, assessment *Assessment) error
+	GetByID(ctx context.Context, ID int) (*Assessment, error)
 }
 
 type PgAssessmentRepository struct {
@@ -40,4 +44,32 @@ func (r *PgAssessmentRepository) Save(ctx context.Context, assessment *Assessmen
 	}
 
 	return nil
+}
+
+func (r *PgAssessmentRepository) GetByID(ctx context.Context, ID int) (*Assessment, error) {
+	query := `
+		SELECT
+			soa_id,
+			soa_text,
+			soa_date_add
+		FROM so_assessment
+		WHERE soa_id = $1
+	`
+
+	var assessment Assessment
+
+	if err := r.connection.QueryRowContext(ctx, query, ID).Scan(
+		&assessment.ID,
+		&assessment.Content,
+		&assessment.DateAdd,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, eris.Wrapf(ErrAssessmentNotFound, "No assessment found with id: %d", ID)
+		}
+
+		return nil, eris.Wrap(err, "Error querying assessment by id")
+	}
+
+	return &assessment, nil
+
 }

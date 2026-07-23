@@ -74,6 +74,8 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	data.Diet = meals
 
+	//assessment, err := s.assessmentRepo.GetByID(ctx, 1)
+
 	assessment, err := s.aiAssessment(ctx, &data)
 
 	if err != nil {
@@ -92,8 +94,12 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		for _, chunk := range messageChunks {
 			message := vendor.OutgoingMessage{
 				ChatID:    data.Profile.TelegramChatID,
-				Text:      chunk,
+				Text:      helper.CustomXMLToMarkdownV2(chunk),
 				ParseMode: vendor.TelegramMarkdownV2,
+			}
+
+			if err := helper.ValidateMarkdownV2(message.Text); err != nil {
+				return eris.Wrap(err, "Error in markdown validation")
 			}
 
 			if err := s.bot.SendMessage(ctx, message); err != nil {
@@ -106,8 +112,12 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
-		Text:      assessment.Content,
+		Text:      helper.CustomXMLToMarkdownV2(assessment.Content),
 		ParseMode: vendor.TelegramMarkdownV2,
+	}
+
+	if err := helper.ValidateMarkdownV2(message.Text); err != nil {
+		return eris.Wrap(err, "Error in markdown validation")
 	}
 
 	if err := s.bot.SendMessage(ctx, message); err != nil {
@@ -205,7 +215,7 @@ func (s *Service) aiAssessment(ctx context.Context, data *AssessmentData) (*Asse
 		return nil, eris.Wrap(err, "Assesment error calling AI")
 	}
 
-	//return helper.EscapeText(aiRes.Text()), nil
+	escapedRes := helper.EscapeText(aiRes.Text())
 
-	return &Assessment{Content: aiRes.Text()}, nil
+	return &Assessment{Content: escapedRes}, nil
 }

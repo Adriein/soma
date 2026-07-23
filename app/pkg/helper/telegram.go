@@ -5,19 +5,21 @@ import (
 	"strings"
 )
 
-const specialChars = "_*[]()~`>#+-=|{}.!"
+const (
+	specialChars = "_*[]()~`>#+-=|{}.!"
+)
 
-type Context int
+type context int
 
 const (
-	ContextText Context = iota
+	ContextText context = iota
 	ContextInlineCode
 	ContextCodeBlock
 	ContextLinkText
 	ContextLinkURL
 )
 
-type Char struct {
+type char struct {
 	Value string
 	Pos   int
 }
@@ -26,9 +28,9 @@ func EscapeText(text string) string {
 	replacer := strings.NewReplacer(
 		"_", "\\_", "*", "\\*", "[", "\\[", "]", "\\]",
 		"(", "\\(", ")", "\\)", "~", "\\~", "`", "\\`",
-		">", "\\>", "#", "\\#", "+", "\\+", "-", "\\-",
-		"=", "\\=", "|", "\\|", "{", "\\{", "}", "\\}",
-		".", "\\.", "!", "\\!",
+		"#", "\\#", "+", "\\+", "-", "\\-", "=", "\\=",
+		"|", "\\|", "{", "\\{", "}", "\\}", ".", "\\.",
+		"!", "\\!",
 	)
 	return replacer.Replace(text)
 }
@@ -70,7 +72,7 @@ func SplitMessage(text string, minChunkSize int) []string {
 
 func ValidateMarkdownV2(input string) error {
 	var (
-		stack []Char
+		stack []char
 		ctx   = ContextText
 		runes = []rune(input)
 		n     = len(runes)
@@ -140,7 +142,7 @@ func ValidateMarkdownV2(input string) error {
 
 			// Transition: Inline Link Text [...]
 			if r == '[' {
-				stack = append(stack, Char{Value: "[", Pos: i})
+				stack = append(stack, char{Value: "[", Pos: i})
 				ctx = ContextLinkText
 				i++
 				continue
@@ -168,7 +170,7 @@ func ValidateMarkdownV2(input string) error {
 				if len(stack) > 0 && stack[len(stack)-1].Value == delim {
 					stack = stack[:len(stack)-1] // Close tag
 				} else {
-					stack = append(stack, Char{Value: delim, Pos: i}) // Open tag
+					stack = append(stack, char{Value: delim, Pos: i}) // Open tag
 				}
 				i += 2
 				continue
@@ -180,7 +182,7 @@ func ValidateMarkdownV2(input string) error {
 				if len(stack) > 0 && stack[len(stack)-1].Value == delim {
 					stack = stack[:len(stack)-1] // Close tag
 				} else {
-					stack = append(stack, Char{Value: delim, Pos: i}) // Open tag
+					stack = append(stack, char{Value: delim, Pos: i}) // Open tag
 				}
 				i++
 				continue
@@ -199,10 +201,26 @@ func ValidateMarkdownV2(input string) error {
 	if ctx != ContextText {
 		return fmt.Errorf("syntax error: unclosed block context %v", ctx)
 	}
+
 	if len(stack) > 0 {
 		char := stack[len(stack)-1]
 		return fmt.Errorf("syntax error: unclosed formatting tag '%s', in: %s", char.Value, string(runes[char.Pos-10:char.Pos+10]))
 	}
 
 	return nil
+}
+
+func CustomXMLToMarkdownV2(input string) string {
+	replacer := strings.NewReplacer(
+		"<title>", "*__", "</title>", "__*",
+		"<sub>", "*", "</sub>", "*",
+		"<bold>", "*", "</bold>", "*",
+		"<italic>", "_", "</italic>", "_",
+		"<underline>", "__", "</underline>", "__",
+		"<strikethrough>", "~", "</strikethrough>", "~",
+		"<code>", "`", "</code>", "`",
+		"<quote>", ">", "</quote>", "",
+	)
+
+	return replacer.Replace(input)
 }
