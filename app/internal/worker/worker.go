@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/adriein/soma/app/internal/coach"
@@ -94,7 +95,7 @@ func (w *Worker) handleUpdate(ctx context.Context, update vendor.TelegramUpdate)
 			w.logger.Error(eris.ToString(err, true))
 		}
 	case AssessmentWorkerCommand:
-		err := w.handleAssessment(ctx, update)
+		err := w.handleAssessment(ctx, update, args)
 
 		if err != nil {
 			w.logger.Error(eris.ToString(err, true))
@@ -114,6 +115,19 @@ func (w *Worker) handleExchangeToken(ctx context.Context, update vendor.Telegram
 	return w.customerServ.ExchangeToken(ctx, update.Message.Chat.ID, verificator)
 }
 
-func (w *Worker) handleAssessment(ctx context.Context, update vendor.TelegramUpdate) error {
-	return w.coachServ.Assessment(ctx, update.Message.Chat.ID)
+func (w *Worker) handleAssessment(ctx context.Context, update vendor.TelegramUpdate, args []string) error {
+	if len(args) == 1 {
+		return w.coachServ.Assessment(ctx, update.Message.Chat.ID, 0)
+	}
+
+	daysArg := args[1]
+
+	days, err := strconv.Atoi(daysArg)
+
+	if err != nil {
+		return eris.Wrapf(err, "Error converting days arg: %s to int", daysArg)
+	}
+
+	return w.coachServ.Assessment(ctx, update.Message.Chat.ID, days)
+
 }

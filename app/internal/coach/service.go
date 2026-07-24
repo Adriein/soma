@@ -25,7 +25,7 @@ const (
 )
 
 type CoachService interface {
-	Assessment(ctx context.Context, chatID int64) error
+	Assessment(ctx context.Context, chatID int64, days int) error
 }
 
 type Service struct {
@@ -55,9 +55,11 @@ func NewService(
 	}
 }
 
-func (s *Service) Assessment(ctx context.Context, chatID int64) error {
+func (s *Service) Assessment(ctx context.Context, chatID int64, days int) error {
 	//TODO: añadir el analisis por semana en lugar de un todo
 	var data AssessmentData
+
+	data.Days = days
 
 	sessionID := helper.TinyUuid()
 
@@ -153,6 +155,10 @@ func (s *Service) collectMeals(ctx context.Context, data *AssessmentData) ([]*Di
 
 	//The fist date I've added meals is 2026-06-25
 	targetDate := time.Date(2026, time.June, 25, 0, 0, 0, 0, loc)
+
+	if data.Days > 0 {
+		targetDate = now.AddDate(0, 0, -data.Days)
+	}
 
 	dur := now.Sub(targetDate)
 
