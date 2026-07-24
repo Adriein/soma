@@ -99,7 +99,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 		for _, chunk := range messageChunks {
 			message := vendor.OutgoingMessage{
 				ChatID:    data.Profile.TelegramChatID,
-				Text:      fmt.Sprintf("*SomaBot \\#%s*\n%s", sessionID, helper.CustomXMLToMarkdownV2(chunk)),
+				Text:      fmt.Sprintf("*SomaBot \\#%s*\n\n%s", sessionID, helper.CustomXMLToMarkdownV2(chunk)),
 				ParseMode: vendor.TelegramMarkdownV2,
 			}
 
@@ -117,7 +117,7 @@ func (s *Service) Assessment(ctx context.Context, chatID int64) error {
 
 	message := vendor.OutgoingMessage{
 		ChatID:    data.Profile.TelegramChatID,
-		Text:      fmt.Sprintf("*SomaBot \\#%s*\n%s", sessionID, helper.CustomXMLToMarkdownV2(assessment.Content)),
+		Text:      fmt.Sprintf("*SomaBot \\#%s*\n\n%s", sessionID, helper.CustomXMLToMarkdownV2(assessment.Content)),
 		ParseMode: vendor.TelegramMarkdownV2,
 	}
 
